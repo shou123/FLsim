@@ -1,0 +1,15 @@
+Pillow
+hydra-core>=1.1.1
+matplotlib
+numpy
+omegaconf>=2.1.0
+opacus
+pandas
+pytest
+scikit-learn
+setuptools
+tensorboard
+torchvision
+tqdm
+
+[dev]
