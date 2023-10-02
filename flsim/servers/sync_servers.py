@@ -214,7 +214,7 @@ class SyncServer(ISyncServer):
         )
 
     def step(self):
-        aggregated_model = self._aggregator.aggregate()
+        aggregated_model = self._aggregator.aggregate() #return buffer_model
         FLModelParamUtils.set_gradient(
             model=self._global_model.fl_get_module(),
             reference_gradient=aggregated_model,
