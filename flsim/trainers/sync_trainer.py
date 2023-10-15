@@ -391,6 +391,7 @@ class SyncTrainer(FLTrainer):
     def _save_model_and_metrics(self, model: IFLModel, best_model_state):
         model.fl_get_module().load_state_dict(best_model_state)
 
+
     def _update_clients(
         self,
         clients: Iterable[Client],
@@ -398,11 +399,17 @@ class SyncTrainer(FLTrainer):
         metrics_reporter: Optional[IFLMetricsReporter] = None,
     ) -> None:
         """Update each client-side model from server message."""
+        ###########################
+        self.client_deltas = []
+        ############################
         for client in clients:
             client_delta, weight = client.generate_local_update(
                 message=server_state_message,
                 metrics_reporter=metrics_reporter,
             )
+            ##################################################################
+            self.client_deltas.append(self._get_flat_params_from(client_delta.fl_get_module()))
+            ###################################################################
             self.server.receive_update_from_client(Message(client_delta, weight))
 
     def _train_one_round(
@@ -442,6 +449,17 @@ class SyncTrainer(FLTrainer):
 
         self._post_train_one_round(timeline)
 
+    ###########################################
+    def _get_flat_params_from(self,model):
+        params = []
+        for param in model.parameters():
+            params.append(param.data.view(-1))
+
+        flat_params = torch.cat(params)
+        return flat_params.detach()
+
+    ###########################################
+
     def _train_one_round_apply_updates(
         self,
         timeline: Timeline,
@@ -460,6 +478,9 @@ class SyncTrainer(FLTrainer):
         self.logger.info(f"Round initialization took {time() - t} s.")
 
         # Receive message from server to clients, i.e. global model state
+        ###################################################################
+        before = self._get_flat_params_from(self.server.global_model.fl_get_module())
+        ###################################################################
         server_state_message = self.server.broadcast_message_to_clients(
             clients=clients, global_round_num=timeline.global_round_num()
         )
@@ -479,6 +500,13 @@ class SyncTrainer(FLTrainer):
         # After all clients finish their updates, update the global model
         t = time()
         server_return_metrics = self.server.step()
+        ####################################################################
+        global_after = self._get_flat_params_from(self.server.global_model.fl_get_module())
+        distance = []
+        for ind, client_del in enumerate(self.client_deltas):
+            distance.append(((before-client_del)-global_after).norm('fro'))
+            print("Client {}'s norm: {}.".format(ind,distance[-1]))
+        #####################################################################
         self.logger.info(f"Finalizing round took {time() - t} s.")
         return server_return_metrics
 
@@ -830,6 +858,7 @@ class SyncTrainer(FLTrainer):
 
     @staticmethod
     def rounds_in_one_epoch(num_total_users: int, users_per_round: int) -> int:
+        # epch for global and round for local. 
         return math.ceil(num_total_users / users_per_round)
 
 
