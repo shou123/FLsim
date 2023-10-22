@@ -22,7 +22,7 @@
           "momentum": 0
         }
       },
-      "users_per_round": 2,
+      "users_per_round": 10,
       "train_metrics_reported_per_epoch": 1,
       "always_keep_trained_model": false,
       "report_train_metrics": true,

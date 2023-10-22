@@ -75,7 +75,6 @@ def main(
     if cuda_enabled:
         global_model.fl_cuda()
     trainer = instantiate(trainer_config, model=global_model, cuda_enabled=cuda_enabled)
-    print(f"Created {trainer_config._target_}")
     data_provider = build_data_provider(
         local_batch_size=data_config.local_batch_size,
         examples_per_user=data_config.examples_per_user,
