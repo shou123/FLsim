@@ -161,14 +161,14 @@ class Client:
         )
 
         delta_model = self.get_state_dict(delta.fl_get_module(),False)
-        print(f"delta_model: {delta}")
+        # print(f"delta_model: {delta}")
 
 
-        delta_model_file = "/home/shiyue/FLSim/results/" + "delta_model"+str(delta)
-        with open(delta_model_file, 'a') as file:
-            for key, value in delta_model.items():
-                print(key,value.shape)
-                file.write(f"{key}: {value}\n")
+        # delta_model_file = "/home/shiyue/FLSim/results/" + "delta_model"+str(delta)
+        # with open(delta_model_file, 'a') as file:
+        #     for key, value in delta_model.items():
+        #         print(key,value.shape)
+        #         file.write(f"{key}: {value}\n")
         # 6. Track the state of the client
         self.track(delta=delta, weight=weight, optimizer=optimizer)
 
@@ -209,7 +209,7 @@ class Client:
             metrics_reporter=metrics_reporter,
             epochs=epochs,
         )
-        print(f"after training model: {updated_model}")
+        # print(f"after training model: {updated_model}")
 
         return updated_model, weight, optim
 
@@ -234,24 +234,24 @@ class Client:
             subtrahend=after.fl_get_module(),
             difference=model_to_save.fl_get_module(),
         )
-        print(f"before_model_address: {before}")
-        print(f"after_model_address: {after}")
+        # print(f"before_model_address: {before}")
+        # print(f"after_model_address: {after}")
 
 
-        before_model = self.get_state_dict(before.fl_get_module(), False)
-        # print(f"before_model: {before_model}")
-        after_model = self.get_state_dict(after.fl_get_module(), False)
-        # print(f"after_model: {after_model}")
+        # before_model = self.get_state_dict(before.fl_get_module(), False)
+        # # print(f"before_model: {before_model}")
+        # after_model = self.get_state_dict(after.fl_get_module(), False)
+        # # print(f"after_model: {after_model}")
 
-        before_module_file = "/home/shiyue/FLSim/results/" + str(before)
-        with open(before_module_file, 'a') as file:
-            for key, value in before_model.items():
-                file.write(f"{key}: {value}\n")
+        # before_module_file = "/home/shiyue/FLSim/results/" + str(before)
+        # with open(before_module_file, 'a') as file:
+        #     for key, value in before_model.items():
+        #         file.write(f"{key}: {value}\n")
         
-        after_module_file = "/home/shiyue/FLSim/results/" + str(after)
-        with open(after_module_file, 'a') as file:
-            for key, value in after_model.items():
-                file.write(f"{key}: {value}\n")
+        # after_module_file = "/home/shiyue/FLSim/results/" + str(after)
+        # with open(after_module_file, 'a') as file:
+        #     for key, value in after_model.items():
+        #         file.write(f"{key}: {value}\n")
 
         return model_to_save
 

@@ -83,4 +83,4 @@ class Timeline(NamedTuple):
         e = self.epoch or ((self.global_round - 1) // self.rounds_per_epoch + 1)
         r = self.round or (((self.global_round - 1) % self.rounds_per_epoch) + 1)
         gr = ((e - 1) * self.rounds_per_epoch + r) or self.global_round
-        return f"(epoch = {e}, round = {r}, global round = {gr})"
+        return f"(round = {e}, epoch = {r}, global round = {gr})"

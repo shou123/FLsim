@@ -198,16 +198,16 @@ class SyncServer(ISyncServer):
         message = self._channel.client_to_server(message)
 
         delta_model_dic = self.get_state_dict(message.model.fl_get_module(),False)
-        for name,item in delta_model_dic.items():
-            print(f"update_delta_to_the_server, name: {name}, item: {item}")
+        # for name,item in delta_model_dic.items():
+        #     print(f"update_delta_to_the_server, name: {name}, item: {item}")
         
         # Add the weights (parameters) of a model delta to the buffer module.
         self._aggregator.apply_weight_to_update(
             delta=message.model.fl_get_module(), weight=message.weight
         )
         delta_model_dic = self.get_state_dict(message.model.fl_get_module(),False)
-        for name,item in delta_model_dic.items():
-            print(f"update_delta_to_the_server, name: {name}, item: {item}")
+        # for name,item in delta_model_dic.items():
+        #     print(f"update_delta_to_the_server, name: {name}, item: {item}")
         # ""Update buffer module by adding the weights of a model delta to it.
         self._aggregator.add_update(
             delta=message.model.fl_get_module(), weight=message.weight

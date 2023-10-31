@@ -106,39 +106,39 @@ class FLModelParamUtils:
     ) -> None:
         """sets model_to_save = model1*wt1 + model2*wt2"""
         global_params = cls.get_state_dict(model_to_save, only_federated_params) #after_model
-        for name,global_param in global_params.items():
-            print(f"global_params")
-            print(f"name:{name}, global_param: {global_param}")
-        print("================================================")
+        # for name,global_param in global_params.items():
+        #     print(f"global_params")
+        #     print(f"name:{name}, global_param: {global_param}")
+        # print("================================================")
         
 
         params_model1 = cls.get_state_dict(model1, only_federated_params) #before_model
-        for name,before_param in params_model1.items():
-            print(f"before_model")
-            print(f"name:{name}, before_param: {before_param}")
-        print("================================================")
+        # for name,before_param in params_model1.items():
+        #     print(f"before_model")
+        #     print(f"name:{name}, before_param: {before_param}")
+        # print("================================================")
 
         # print(f"before training weights: {params_model1}" )
         # cls.save_parameter(params_model1,params_model1)
         params_model2 = cls.get_state_dict(model2, only_federated_params) #after_model
-        for name,after_param in params_model2.items():
-            print(f"after_model")
-            print(f"name:{name}, after_param: {after_param}")
-        print("================================================")
+        # for name,after_param in params_model2.items():
+        #     print(f"after_model")
+        #     print(f"name:{name}, after_param: {after_param}")
+        # print("================================================")
 
         # cls.save_parameter(params_model2,params_model2)
         assert (
             global_params.keys() == params_model1.keys() == params_model2.keys()
         ), "Models should have the same set of parameters, including order."
 
-        print("================================================")
+        # print("================================================")
         with torch.no_grad():
             for name, global_param in global_params.items():
-                print(f"name:{name}, global_param: {global_param}")
+                # print(f"name:{name}, global_param: {global_param}")
                 global_param.data = (params_model1[name].data * wt1 + params_model2[name].data * wt2) #wt1 = 1,wt2 = -1)
-                print("**********************************************")
-                print(f"updated_globals_models")
-                print(f"global_param.data:{global_param.data}")
+                # print("**********************************************")
+                # print(f"updated_globals_models")
+                # print(f"global_param.data:{global_param.data}")
 
         cls.load_state_dict(model_to_save, global_params, only_federated_params)
 

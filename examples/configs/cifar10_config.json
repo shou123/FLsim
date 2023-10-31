@@ -2,7 +2,7 @@
   "config": {
     "trainer": {
       "_base_": "base_sync_trainer",
-      "epochs": 1,
+      "epochs": 500, 
       "server": {
         "_base_": "base_sync_server",
         "server_optimizer": {
@@ -15,7 +15,7 @@
         }
       },
       "client": {
-        "epochs": 1,
+        "epochs": 2,
         "optimizer": {
           "_base_": "base_optimizer_sgd",
           "lr": 0.0138,
@@ -29,10 +29,11 @@
       "eval_epoch_frequency": 1,
       "do_eval": true,
       "report_train_metrics_after_aggregation": true
+
     },
     "data": {
-      "local_batch_size": 1,
-      "examples_per_user": 500
+      "local_batch_size": 32,
+      "examples_per_user": 25000
     }
   }
 }

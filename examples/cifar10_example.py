@@ -18,7 +18,7 @@ With this tutorial, you will learn the following key components of FLSim:
 import flsim.configs  # noqa
 import hydra
 import torch
-from flsim.data.data_sharder import SequentialSharder
+from flsim.data.data_sharder import SequentialSharder,RandomSharder
 from flsim.interfaces.metrics_reporter import Channel
 from flsim.utils.config_utils import maybe_parse_json_config
 from flsim.utils.example_utils import (
@@ -53,12 +53,13 @@ def build_data_provider(local_batch_size, examples_per_user, drop_last: bool = F
     test_dataset = CIFAR10(
         root="../cifar10", train=False, download=True, transform=transform
     )
-    sharder = SequentialSharder(examples_per_shard=examples_per_user)
+    # sharder = SequentialSharder(examples_per_shard=examples_per_user)
+    sharder = RandomSharder(num_shards=100)
+
     fl_data_loader = DataLoader(
         train_dataset, test_dataset, test_dataset, sharder, local_batch_size, drop_last
     )
     data_provider = DataProvider(fl_data_loader)
-    print(f"Clients in total: {data_provider.num_train_users()}")
     return data_provider
 
 
@@ -77,7 +78,8 @@ def main(
     trainer = instantiate(trainer_config, model=global_model, cuda_enabled=cuda_enabled)
     data_provider = build_data_provider(
         local_batch_size=data_config.local_batch_size,
-        examples_per_user=data_config.examples_per_user,
+        # examples_per_user=data_config.examples_per_user,
+        examples_per_user = trainer_config.users_per_round,
         drop_last=False,
     )
 
