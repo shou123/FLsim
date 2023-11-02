@@ -503,13 +503,21 @@ class SyncTrainer(FLTrainer):
         ####################################################################
         global_after = self._get_flat_params_from(self.server.global_model.fl_get_module())
         distance = []
+        # with open("/home/shiyue/FLSim/results/distance_values.txt", "a") as file:
+        #     for ind, client_del in enumerate(self.client_deltas):
+        #         distance.append(((before-client_del)-global_after).norm('fro'))
+                
+        #         for i in self._user_indices_overselected:
+        #             print("Client {}'s norm: {}.".format(i,distance[-1]))
+        #             client_norm_info = "Client {}'s norm: {}\n".format(i, distance[-1])
+        #             file.write(client_norm_info)
         with open("/home/shiyue/FLSim/results/distance_values.txt", "a") as file:
-            for ind, client_del in enumerate(self.client_deltas):
-                distance.append(((before-client_del)-global_after).norm('fro'))
-                print("Client {}'s norm: {}.".format(ind,distance[-1]))
-
-                client_norm_info = "Client {}'s norm: {}.\n".format(ind, distance[-1])
+            for client_del, i in zip(self.client_deltas, self._user_indices_overselected):
+                distance.append(((before - client_del) - global_after).norm('fro'))
+                print("Client {}'s norm: {}.".format(i, distance[-1]))
+                client_norm_info = "Client {}'s norm: {}\n".format(i, distance[-1])
                 file.write(client_norm_info)
+
         #####################################################################
         self.logger.info(f"Finalizing round took {time() - t} s.")
         return server_return_metrics

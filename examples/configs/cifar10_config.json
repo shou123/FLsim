@@ -11,7 +11,7 @@
           "momentum": 0.9
         },
         "active_user_selector": {
-          "_base_": "base_sequential_active_user_selector"
+          "_base_": "base_uniformly_random_active_user_selector"
         }
       },
       "client": {
