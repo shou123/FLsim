@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import re 
 
 # Define the file path
-file_path = "/home/shiyue/FLSim/results/distance_values.txt"
+file_path = "/home/shiyue/FLsim/results/distance_values.txt"
 
 # Initialize a dictionary to store client data
 client_data = {}

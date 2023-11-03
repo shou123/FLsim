@@ -511,7 +511,7 @@ class SyncTrainer(FLTrainer):
         #             print("Client {}'s norm: {}.".format(i,distance[-1]))
         #             client_norm_info = "Client {}'s norm: {}\n".format(i, distance[-1])
         #             file.write(client_norm_info)
-        with open("/home/shiyue/FLSim/results/distance_values.txt", "a") as file:
+        with open("/home/shiyue/FLsim/results/distance_values.txt", "a") as file:
             for client_del, i in zip(self.client_deltas, self._user_indices_overselected):
                 distance.append(((before - client_del) - global_after).norm('fro'))
                 print("Client {}'s norm: {}.".format(i, distance[-1]))

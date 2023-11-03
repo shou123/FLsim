@@ -411,7 +411,7 @@ class MetricsReporter(FLMetricsReporter):
 
     def compare_metrics(self, eval_metrics, best_metrics):
         print(f"Current eval accuracy: {eval_metrics}%, Best so far: {best_metrics}%")
-        with open("/home/shiyue/FLSim/results/accuracy_trend.txt", "a") as file:
+        with open("/home/shiyue/FLsim/results/accuracy_trend.txt", "a") as file:
             file.write(f"{eval_metrics}\n")
         
         if best_metrics is None:

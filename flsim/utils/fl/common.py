@@ -88,7 +88,7 @@ class FLModelParamUtils:
         formatted_content = str(content)
 
         # Specify the path where you want to save the text file
-        file_path = "/home/shiyue/FLSim/results/{file_name}.txt"
+        file_path = "/home/shiyue/FLsim/results/{file_name}.txt"
 
         # Save the formatted content to the text file
         with open(file_path, 'w') as file:
