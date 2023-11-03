@@ -2,7 +2,7 @@
   "config": {
     "trainer": {
       "_base_": "base_sync_trainer",
-      "epochs": 500, 
+      "epochs": 100, 
       "server": {
         "_base_": "base_sync_server",
         "server_optimizer": {
@@ -11,11 +11,11 @@
           "momentum": 0.9
         },
         "active_user_selector": {
-          "_base_": "base_uniformly_random_active_user_selector"
+          "_base_": "base_sequential_active_user_selector"
         }
       },
       "client": {
-        "epochs": 2,
+        "epochs": 1,
         "optimizer": {
           "_base_": "base_optimizer_sgd",
           "lr": 0.0138,

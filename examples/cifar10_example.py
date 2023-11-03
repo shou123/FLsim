@@ -54,7 +54,7 @@ def build_data_provider(local_batch_size, examples_per_user, drop_last: bool = F
         root="../cifar10", train=False, download=True, transform=transform
     )
     # sharder = SequentialSharder(examples_per_shard=examples_per_user)
-    sharder = RandomSharder(num_shards=100)
+    sharder = RandomSharder(num_shards=10)
 
     fl_data_loader = DataLoader(
         train_dataset, test_dataset, test_dataset, sharder, local_batch_size, drop_last
