@@ -76,19 +76,23 @@ class DataLoader(IFLDataLoader):
     ) -> Generator[Dict[str, Generator], None, None]:
         # pyre-fixme[16]: `VisionDataset` has no attribute `__iter__`.
         data_rows: List[Dict[str, Any]] = [self.collate_fn(batch) for batch in dataset]
-        for _, (_, user_data) in enumerate(self.sharder.shard_rows(data_rows)):
-            batch = {}
-            keys = user_data[0].keys()
-            for key in keys:
-                attribute = {
-                    key: batchify(
-                        [row[key] for row in user_data],
-                        self.batch_size,
-                        drop_last,
-                    )
-                }
-                batch = {**batch, **attribute}
-            yield batch
+        with open("/home/shiyue/FLsim/results/client_data_size.txt", "a") as file:
+            for client_id, (client_index, user_data) in enumerate(self.sharder.shard_rows(data_rows)):
+                print(f"client: {client_index}, data_size: {len(user_data)}")
+                file.write(f"client: {client_index}, data_size: {len(user_data)}\n")
+
+                batch = {}
+                keys = user_data[0].keys()
+                for key in keys:
+                    attribute = {
+                        key: batchify(
+                            [row[key] for row in user_data],
+                            self.batch_size,
+                            drop_last,
+                        )
+                    }
+                    batch = {**batch, **attribute}
+                yield batch
 
 
 class UserData(IFLUserData):
@@ -116,6 +120,7 @@ class UserData(IFLUserData):
                 self._num_train_batches += 1
                 self._num_train_examples += UserData.get_num_examples(labels)
                 self._train_batches.append(UserData.fl_training_batch(features, labels))
+        
 
     def num_train_examples(self) -> int:
         """
@@ -211,15 +216,12 @@ class LEAFDataLoader(IFLDataLoader):
 class DataProvider(IFLDataProvider):
     def __init__(self, data_loader):
         self.data_loader = data_loader
-        self._train_users = self._create_fl_users(
-            data_loader.fl_train_set(), eval_split=0.0
-        )
-        self._eval_users = self._create_fl_users(
-            data_loader.fl_eval_set(), eval_split=1.0
-        )
-        self._test_users = self._create_fl_users(
-            data_loader.fl_test_set(), eval_split=1.0
-        )
+        fl_train_set = data_loader.fl_train_set()
+        self._train_users = self._create_fl_users(fl_train_set, eval_split=0.0)
+        fl_eval_set = data_loader.fl_eval_set()
+        self._eval_users = self._create_fl_users(fl_eval_set, eval_split=1.0)
+        fl_test_set = data_loader.fl_test_set()
+        self._test_users = self._create_fl_users(fl_test_set, eval_split=1.0)
 
     def train_user_ids(self) -> List[int]:
         return list(self._train_users.keys())
