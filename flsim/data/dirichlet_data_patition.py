@@ -1,6 +1,6 @@
 import os 
 import numpy as np
-from torchvision.datasets.cifar import CIFAR10
+# from torchvision.datasets.cifar import CIFAR10
 from keras.datasets import cifar10
 import torchvision.transforms as transforms
 
@@ -20,23 +20,26 @@ def save_cifar10_party_data(should_stratify, party_folder):
     # if not os.path.exists(dataset_folder):
     #     os.makedirs(dataset_folder)
 
-    transform = transforms.Compose([transforms.ToTensor()])
+    # transform = transforms.Compose([transforms.ToTensor()])
 
-    train_dataset = CIFAR10(
-        root="../cifar10", train=True, download=True, transform=transform
-    )
-    test_dataset = CIFAR10(
-        root="../cifar10", train=False, download=True, transform=transform
-    )
+    # train_dataset = CIFAR10(
+    #     root="../cifar10", train=True, download=True, transform=transform
+    # )
+    # test_dataset = CIFAR10(
+    #     root="../cifar10", train=False, download=True, transform=transform
+    # )
 
-        # Select the top 25,000 data points
-    top_25000_indices = np.arange(25000)
-    nb_dp_per_party = [train_dataset[i] for i in top_25000_indices]
+    #     # Select the top 25,000 data points
+    # top_25000_indices = np.arange(25000)
+    # nb_dp_per_party = [train_dataset[i] for i in top_25000_indices]
 
-    x_train, y_train = train_dataset.data, train_dataset.targets
-    x_test, y_test = test_dataset.data, test_dataset.targets
+    # x_train, y_train = train_dataset.data, train_dataset.targets
+    # x_test, y_test = test_dataset.data, test_dataset.targets
 
     (x_train, y_train), (x_test, y_test) = cifar10.load_data()
+    top_25000_indices = np.arange(25000)
+    nb_dp_per_party = [x_train[i] for i in top_25000_indices]
+
     # (x_train, y_train), (x_test, y_test) = partition_data(dataset='cifar10',dataset_folder= dataset_folder, partition="hetero-dir",n_nets=8, alpha=0.5 )
     labels, train_counts = np.unique(y_train, return_counts=True)
     te_labels, test_counts = np.unique(y_test, return_counts=True)
@@ -44,10 +47,10 @@ def save_cifar10_party_data(should_stratify, party_folder):
         print("Warning: test set and train set contain different labels")
        
 
-    num_train = np.shape(y_train)[0]
-    num_test = np.shape(y_test)[0]
-    num_labels = np.shape(np.unique(y_test))[0]
-    nb_parties = len(nb_dp_per_party)
+    num_train = np.shape(y_train)[0] #50000
+    num_test = np.shape(y_test)[0] #10000
+    num_labels = np.shape(np.unique(y_test))[0] #10
+    nb_parties = len(nb_dp_per_party) #25000
 
     if should_stratify:
         # Sample according to source label distribution
@@ -86,7 +89,7 @@ def save_cifar10_party_data(should_stratify, party_folder):
         print(test_probs)
         train_p = np.array([train_probs[y_train[idx]]
                             for idx in range(num_train)])
-        train_p = np.array(train_p)
+        train_p = np.array(train_p) #the probability of 50000
         train_p /= np.sum(train_p)
         train_indices = np.random.choice(num_train, dp, p=train_p)
         test_p = np.array([test_probs[y_test[idx]] for idx in range(num_test)])

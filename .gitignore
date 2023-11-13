@@ -1,3 +1,5 @@
 examples/results
 examples/runs
-results/*
+results/accuracy_trend.txt
+results/client_data_size.txt
+results/distance_values.txt
