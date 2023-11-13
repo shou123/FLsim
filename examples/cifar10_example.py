@@ -53,9 +53,9 @@ def build_data_provider(local_batch_size, examples_per_user, drop_last: bool = F
     test_dataset = CIFAR10(
         root="/home/shiyue/FLsim/cifar10", train=False, download=True, transform=transform
     )
-    # sharder = SequentialSharder(examples_per_shard=examples_per_user)
+    sharder = SequentialSharder(examples_per_shard=examples_per_user)
     # sharder = RandomSharder(num_shards=10)
-    sharder = PowerLawSharder(num_shards=10,alpha = 0.8)
+    # sharder = PowerLawSharder(num_shards=10,alpha = 0.8)
     
 
     fl_data_loader = DataLoader(
@@ -80,8 +80,8 @@ def main(
     trainer = instantiate(trainer_config, model=global_model, cuda_enabled=cuda_enabled)
     data_provider = build_data_provider(
         local_batch_size=data_config.local_batch_size,
-        # examples_per_user=data_config.examples_per_user,
-        examples_per_user = trainer_config.users_per_round,
+        examples_per_user=data_config.examples_per_user,
+        # examples_per_user = trainer_config.users_per_round,
         drop_last=False,
     )
 
