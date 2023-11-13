@@ -18,7 +18,7 @@ With this tutorial, you will learn the following key components of FLSim:
 import flsim.configs  # noqa
 import hydra
 import torch
-from flsim.data.data_sharder import SequentialSharder,RandomSharder,PowerLawSharder,DirichletSharder
+from flsim.data.data_sharder import SequentialSharder,RandomSharder,PowerLawSharder
 from flsim.interfaces.metrics_reporter import Channel
 from flsim.utils.config_utils import maybe_parse_json_config
 from flsim.utils.example_utils import (
@@ -48,14 +48,14 @@ def build_data_provider(local_batch_size, examples_per_user, drop_last: bool = F
         ]
     )
     train_dataset = CIFAR10(
-        root="../cifar10", train=True, download=True, transform=transform
+        root="/home/shiyue/FLsim/cifar10", train=True, download=True, transform=transform
     )
     test_dataset = CIFAR10(
-        root="../cifar10", train=False, download=True, transform=transform
+        root="/home/shiyue/FLsim/cifar10", train=False, download=True, transform=transform
     )
     # sharder = SequentialSharder(examples_per_shard=examples_per_user)
     # sharder = RandomSharder(num_shards=10)
-    sharder = PowerLawSharder(num_shards=10,alpha = 0.2)
+    sharder = PowerLawSharder(num_shards=10,alpha = 0.8)
     
 
     fl_data_loader = DataLoader(

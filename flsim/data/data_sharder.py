@@ -18,6 +18,8 @@ import torch
 from flsim.utils.config_utils import fullclassname, init_self_cfg
 from omegaconf import MISSING
 from torch.utils.data import Dataset
+from numpy.random import dirichlet
+
 
 
 Shardable = TypeVar("Shardable", Iterable[Dict[str, Any]], Dataset)
