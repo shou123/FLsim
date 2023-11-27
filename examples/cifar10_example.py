@@ -18,7 +18,7 @@ With this tutorial, you will learn the following key components of FLSim:
 import flsim.configs  # noqa
 import hydra
 import torch
-from flsim.data.data_sharder import SequentialSharder,RandomSharder,PowerLawSharder
+from flsim.data.data_sharder import SequentialSharder,RandomSharder,PowerLawSharder,DirichletSharder
 from flsim.interfaces.metrics_reporter import Channel
 from flsim.utils.config_utils import maybe_parse_json_config
 from flsim.utils.example_utils import (
@@ -27,11 +27,14 @@ from flsim.utils.example_utils import (
     FLModel,
     MetricsReporter,
     SimpleConvNet,
+    DataLoaderForNonIID
 )
 from hydra.utils import instantiate
 from omegaconf import DictConfig, OmegaConf
 from torchvision import transforms
 from torchvision.datasets.cifar import CIFAR10
+import numpy as np
+from flsim.data.dirichlet_data_patition import save_cifar10_party_data
 
 
 IMAGE_SIZE = 32
@@ -39,28 +42,32 @@ IMAGE_SIZE = 32
 
 def build_data_provider(local_batch_size, examples_per_user, drop_last: bool = False):
 
-    transform = transforms.Compose(
-        [
-            transforms.Resize(IMAGE_SIZE),
-            transforms.CenterCrop(IMAGE_SIZE),
-            transforms.ToTensor(),
-            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
-        ]
-    )
-    train_dataset = CIFAR10(
-        root="/home/shiyue/FLsim/cifar10", train=True, download=True, transform=transform
-    )
-    test_dataset = CIFAR10(
-        root="/home/shiyue/FLsim/cifar10", train=False, download=True, transform=transform
-    )
+    # transform = transforms.Compose(
+    #     [
+    #         transforms.Resize(IMAGE_SIZE),
+    #         transforms.CenterCrop(IMAGE_SIZE),
+    #         transforms.ToTensor(),
+    #         transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+    #     ]
+    # )
+    # train_dataset = CIFAR10(
+    #     root="/home/shiyue/FLsim/cifar10", train=True, download=True, transform=transform
+    # )
+    # test_dataset = CIFAR10(
+    #     root="/home/shiyue/FLsim/cifar10", train=False, download=True, transform=transform
+    # )
+
+    train_party_data_list,test_party_data_list = save_cifar10_party_data()
+
+
     sharder = SequentialSharder(examples_per_shard=examples_per_user)
     # sharder = RandomSharder(num_shards=10)
     # sharder = PowerLawSharder(num_shards=10,alpha = 0.8)
-    
 
-    fl_data_loader = DataLoader(
-        train_dataset, test_dataset, test_dataset, sharder, local_batch_size, drop_last
-    )
+    fl_data_loader = DataLoaderForNonIID(train_party_data_list, test_party_data_list, test_party_data_list, sharder, local_batch_size, drop_last)
+
+    # fl_data_loader = DataLoader(train_dataset, test_dataset, test_dataset, sharder, local_batch_size, drop_last)
+
     data_provider = DataProvider(fl_data_loader)
     return data_provider
 
