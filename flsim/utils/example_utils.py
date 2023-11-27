@@ -77,8 +77,73 @@ class DataLoader(IFLDataLoader):
         # pyre-fixme[16]: `VisionDataset` has no attribute `__iter__`.
         data_rows: List[Dict[str, Any]] = [self.collate_fn(batch) for batch in dataset]
         with open("/home/shiyue/FLsim/results/client_data_size.txt", "a") as file:
+            # for loop to user_data is according to the sample_per_user to get the data. user_data is list, for each element there is 2 dictionary
             for client_id, (client_index, user_data) in enumerate(self.sharder.shard_rows(data_rows)):
                 print(f"client: {client_index}, data_size: {len(user_data)}")
+                file.write(f"client: {client_index}, data_size: {len(user_data)}\n")
+
+                batch = {}
+                keys = user_data[0].keys()
+                for key in keys:
+                    attribute = {
+                        key: batchify(
+                            [row[key] for row in user_data],
+                            self.batch_size,
+                            drop_last,
+                        )
+                    }
+                    batch = {**batch, **attribute}
+                yield batch
+
+
+class DataLoaderForNonIID(IFLDataLoader):
+    SEED = 2137
+    random.seed(SEED)
+
+    def __init__(
+        self,
+        train_party_data_list: List[Dict[str, Any]],
+        eval_party_data_list: List[Dict[str, Any]],
+        test_party_data_list: List[Dict[str, Any]],
+        sharder: FLDataSharder,
+        batch_size: int,
+        drop_last: bool = False,
+        collate_fn=collate_fn,
+    ):
+        assert batch_size > 0, "Batch size should be a positive integer."
+        self.train_party_data_list = train_party_data_list
+        self.test_party_data_list = test_party_data_list
+        self.eval_party_datalist = test_party_data_list
+        self.batch_size = batch_size
+        self.drop_last = drop_last
+        self.sharder = sharder
+        self.collate_fn = collate_fn
+
+    def fl_train_set(self, **kwargs) -> Iterable[Dict[str, Generator]]:
+        rank = kwargs.get("rank", 0)
+        world_size = kwargs.get("world_size", 1)
+        yield from self._batchify(self.train_party_data_list, self.drop_last, world_size, rank)
+
+    def fl_eval_set(self, **kwargs) -> Iterable[Dict[str, Generator]]:
+        yield from self._batchify(self.eval_party_datalist, drop_last=False)
+
+    def fl_test_set(self, **kwargs) -> Iterable[Dict[str, Generator]]:
+        yield from self._batchify(self.test_party_data_list, drop_last=False)
+
+    def _batchify(
+        self,
+        party_data_list: List[Dict[str, Any]],
+        drop_last: bool = False,
+        world_size: int = 1,
+        rank: int = 0,
+    ) -> Generator[Dict[str, Generator], None, None]:
+        # pyre-fixme[16]: `VisionDataset` has no attribute `__iter__`.
+        with open("/home/shiyue/FLsim/results/client_data_size.txt", "a") as file:
+            for client_id, party_data_dict in enumerate(party_data_list):
+                client_index, user_data = next(iter(party_data_dict.items()))
+
+            # for client_id, (client_index, user_data) in enumerate(self.sharder.shard_rows(data_rows)):
+                # print(f"client: {client_index}, data_size: {len(user_data)}")
                 file.write(f"client: {client_index}, data_size: {len(user_data)}\n")
 
                 batch = {}
