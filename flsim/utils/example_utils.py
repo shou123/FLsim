@@ -113,7 +113,7 @@ class DataLoaderForNonIID(IFLDataLoader):
         assert batch_size > 0, "Batch size should be a positive integer."
         self.train_party_data_list = train_party_data_list
         self.test_party_data_list = test_party_data_list
-        self.eval_party_datalist = test_party_data_list
+        self.eval_party_datalist = eval_party_data_list
         self.batch_size = batch_size
         self.drop_last = drop_last
         self.sharder = sharder
