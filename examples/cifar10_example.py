@@ -18,7 +18,7 @@ With this tutorial, you will learn the following key components of FLSim:
 import flsim.configs  # noqa
 import hydra
 import torch
-from flsim.data.data_sharder import SequentialSharder,RandomSharder,PowerLawSharder,DirichletSharder
+from flsim.data.data_sharder import SequentialSharder,RandomSharder,PowerLawSharder
 from flsim.interfaces.metrics_reporter import Channel
 from flsim.utils.config_utils import maybe_parse_json_config
 from flsim.utils.example_utils import (
@@ -42,6 +42,7 @@ IMAGE_SIZE = 32
 
 def build_data_provider(local_batch_size, examples_per_user, drop_last: bool = False):
 
+    #============================================iid===============================================================
     # transform = transforms.Compose(
     #     [
     #         transforms.Resize(IMAGE_SIZE),
@@ -57,16 +58,19 @@ def build_data_provider(local_batch_size, examples_per_user, drop_last: bool = F
     #     root="/home/shiyue/FLsim/cifar10", train=False, download=True, transform=transform
     # )
 
-    train_party_data_list,test_party_data_list = save_cifar10_party_data()
-
-
-    sharder = SequentialSharder(examples_per_shard=examples_per_user)
+    # sharder = SequentialSharder(examples_per_shard=examples_per_user)
     # sharder = RandomSharder(num_shards=10)
     # sharder = PowerLawSharder(num_shards=10,alpha = 0.8)
 
-    fl_data_loader = DataLoaderForNonIID(train_party_data_list, test_party_data_list, test_party_data_list, sharder, local_batch_size, drop_last)
-
     # fl_data_loader = DataLoader(train_dataset, test_dataset, test_dataset, sharder, local_batch_size, drop_last)
+    #================================================================================================================
+
+    #============================================== non iid=====================================================================
+    train_party_data_list,test_party_data_list = save_cifar10_party_data()
+    sharder = SequentialSharder(examples_per_shard=examples_per_user)
+    fl_data_loader = DataLoaderForNonIID(train_party_data_list, test_party_data_list, test_party_data_list, sharder, local_batch_size, drop_last)
+    #===========================================================================================================================
+    
 
     data_provider = DataProvider(fl_data_loader)
     return data_provider
@@ -79,7 +83,11 @@ def main(
 ) -> None:
     cuda_enabled = torch.cuda.is_available() and use_cuda_if_available
     device = torch.device(f"cuda:{0}" if cuda_enabled else "cpu")
-    model = SimpleConvNet(in_channels=3, num_classes=10)
+    # model = SimpleConvNet(in_channels=3, num_classes=10)
+    # model = resnet_example.resnet34(pretrained=False, num_classes=10, input_channels=3)
+    model = torch.hub.load('pytorch/vision:v0.10.0', 'resnet18', pretrained=True)
+
+
     # pyre-fixme[6]: Expected `Optional[str]` for 2nd param but got `device`.
     global_model = FLModel(model, device)
     if cuda_enabled:
