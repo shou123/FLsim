@@ -32,7 +32,7 @@ from flsim.utils.example_utils import (
 from hydra.utils import instantiate
 from omegaconf import DictConfig, OmegaConf
 from torchvision import transforms
-from torchvision.datasets.cifar import CIFAR10
+from torchvision.datasets.cifar import CIFAR10,CIFAR100
 import numpy as np
 from flsim.data.dirichlet_data_patition import save_cifar10_party_data
 
@@ -51,24 +51,38 @@ def build_data_provider(local_batch_size, examples_per_user, drop_last: bool = F
     #         transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
     #     ]
     # )
-    # train_dataset = CIFAR10(
-    #     root="/home/shiyue/FLsim/cifar10", train=True, download=True, transform=transform
-    # )
-    # test_dataset = CIFAR10(
-    #     root="/home/shiyue/FLsim/cifar10", train=False, download=True, transform=transform
-    # )
+    transform_train = transforms.Compose([
+    transforms.RandomCrop(32, padding=4),
+    transforms.RandomHorizontalFlip(),
+    transforms.ToTensor(),
+    transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+    ])
 
-    # sharder = SequentialSharder(examples_per_shard=examples_per_user)
+    transform_test = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+    ])
+
+    train_dataset = CIFAR10(
+        root="/home/shiyue/FLsim/cifar10", train=True, download=True, transform=transform_train
+    )
+    test_dataset = CIFAR10(
+        root="/home/shiyue/FLsim/cifar10", train=False, download=True, transform=transform_test
+    )
+
+    sharder = SequentialSharder(examples_per_shard=examples_per_user)
     # sharder = RandomSharder(num_shards=10)
     # sharder = PowerLawSharder(num_shards=10,alpha = 0.8)
 
-    # fl_data_loader = DataLoader(train_dataset, test_dataset, test_dataset, sharder, local_batch_size, drop_last)
+    fl_data_loader = DataLoader(train_dataset, test_dataset, test_dataset, sharder, local_batch_size, drop_last)
     #================================================================================================================
 
     #============================================== non iid=====================================================================
-    train_party_data_list,test_party_data_list = save_cifar10_party_data()
-    sharder = SequentialSharder(examples_per_shard=examples_per_user)
-    fl_data_loader = DataLoaderForNonIID(train_party_data_list, test_party_data_list, test_party_data_list, sharder, local_batch_size, drop_last)
+    # client_num = 10
+    # dirichlet_alph = 0.9
+    # train_party_data_list,test_party_data_list = save_cifar10_party_data(client_num,examples_per_user,dirichlet_alph)
+    # sharder = SequentialSharder(examples_per_shard=examples_per_user)
+    # fl_data_loader = DataLoaderForNonIID(train_party_data_list, test_party_data_list, test_party_data_list, sharder, local_batch_size, drop_last)
     #===========================================================================================================================
     
 
@@ -84,8 +98,7 @@ def main(
     cuda_enabled = torch.cuda.is_available() and use_cuda_if_available
     device = torch.device(f"cuda:{0}" if cuda_enabled else "cpu")
     # model = SimpleConvNet(in_channels=3, num_classes=10)
-    # model = resnet_example.resnet34(pretrained=False, num_classes=10, input_channels=3)
-    model = torch.hub.load('pytorch/vision:v0.10.0', 'resnet18', pretrained=True)
+    model = torch.hub.load('pytorch/vision:v0.10.0', 'resnet18', pretrained=False)
 
 
     # pyre-fixme[6]: Expected `Optional[str]` for 2nd param but got `device`.
