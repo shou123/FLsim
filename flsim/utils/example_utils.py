@@ -491,9 +491,9 @@ class MetricsReporter(FLMetricsReporter):
     def compute_scores(self) -> Dict[str, Any]:
         # compute accuracy
         correct = torch.Tensor([0])
-        for i in range(len(self.predictions_list)):
-            all_preds = self.predictions_list[i]
-            pred = all_preds.data.max(1, keepdim=True)[1]
+        for i in range(len(self.predictions_list)):# 1570 for tensor 
+            all_preds = self.predictions_list[i] #get one first batch tensor
+            pred = all_preds.data.max(1, keepdim=True)[1] #from each array get the max value
 
             assert pred.device == self.targets_list[i].device, (
                 f"Pred and targets moved to different devices: "
