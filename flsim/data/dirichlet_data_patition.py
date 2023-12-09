@@ -5,7 +5,7 @@ import torchvision.transforms as transforms
 import torch
 
 # def save_cifar10_party_data(should_stratify, party_folder):
-def save_cifar10_party_data():
+def save_cifar10_party_data(client_number,sample_per_user,dirichlet_alph):
     transform = transforms.Compose([transforms.ToTensor()])
 
     train_dataset = CIFAR10(
@@ -15,8 +15,8 @@ def save_cifar10_party_data():
         root="/home/shiyue/FLsim/cifar10", train=False, download=True, transform=transform
     )
 
-    client_number = 10
-    nb_dp_per_party = [5000] * client_number
+    client_number = client_number
+    nb_dp_per_party = [sample_per_user] * client_number
 
     x_train, y_train = train_dataset.data, np.array(train_dataset.targets)
     x_test, y_test = test_dataset.data, np.array(test_dataset.targets)
@@ -37,15 +37,15 @@ def save_cifar10_party_data():
     
     for idx, dp in enumerate(nb_dp_per_party):
         #dirichlet distribution
-        proportions = np.random.dirichlet(np.repeat(0.4, len(labels)))
+        proportions = np.random.dirichlet(np.repeat(dirichlet_alph, len(labels)))
         train_probs = {label: proportions[label] for label in labels}
         #test_probs  = train_probs
         test_probs = train_probs
 
-        print(labels)
-        print (te_labels)
-        # print(train_probs)
-        # print(test_probs)
+        print(f"train_labels: {labels}")
+        print(f"train_probs: {train_probs}")
+        print (f"test_labels: {te_labels}")
+        print(f"test_probs: {test_probs}")
         train_p = np.array([train_probs[y_train[idx]]
                             for idx in range(num_train)])
         train_p = np.array(train_p)
@@ -90,4 +90,4 @@ def save_cifar10_party_data():
     
 
 # if __name__ == "__main__":
-#     save_cifar10_party_data()
+#     save_cifar10_party_data(10,5000,0.4)
