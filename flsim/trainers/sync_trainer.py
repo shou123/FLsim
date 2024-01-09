@@ -34,13 +34,12 @@ from hydra.utils import instantiate
 from omegaconf import OmegaConf
 from tqdm import tqdm
 
-
 class SyncTrainer(FLTrainer):
     """Implements synchronous Federated Learning Training.
 
     Defaults to Federated Averaging (FedAvg): https://arxiv.org/abs/1602.05629
     """
-
+    global evaluate_data_list
     def __init__(
         self,
         *,
@@ -68,6 +67,7 @@ class SyncTrainer(FLTrainer):
         # Value: client object
         self.clients = {}
         self._last_report_round_after_aggregation = 0
+        self.evaluate_data_list = None
 
     @classmethod
     def _set_defaults_in_cfg(cls, cfg):
@@ -146,12 +146,14 @@ class SyncTrainer(FLTrainer):
         self.clients[dataset_id] = client
         return self.clients[dataset_id]
 
+
     def train(
         self,
         data_provider: IFLDataProvider,
         metrics_reporter: IFLMetricsReporter,
         num_total_users: int,
         distributed_world_size: int,
+        evaluate_data: List[Any],
         rank: int = 0,
     ) -> Tuple[IFLModel, Any]:
         """Trains and evaluates the model, modifying the model state. Iterates over the
@@ -181,6 +183,11 @@ class SyncTrainer(FLTrainer):
             Depending on the chosen active user selector, we may not iterate over
             all users in a given epoch.
         """
+        self.evaluate_data = evaluate_data # this is from raw test data
+        self.evaluate = data_provider._eval_users # this is from test data wrapper
+
+
+
         # Set up synchronization utilities for distributed training
         FLDistributedUtils.setup_distributed_training(
             distributed_world_size, use_cuda=self.cuda_enabled
@@ -391,18 +398,97 @@ class SyncTrainer(FLTrainer):
     def _save_model_and_metrics(self, model: IFLModel, best_model_state):
         model.fl_get_module().load_state_dict(best_model_state)
 
+    def calculate_accuracy(self, predictions, labels):
+    # Example accuracy calculation
+        correct_predictions = (torch.argmax(predictions, dim=1) == labels).sum().item()
+        total_predictions = len(labels)
+        accuracy = correct_predictions / total_predictions
+        return accuracy
 
     def _update_clients(
         self,
         clients: Iterable[Client],
         server_state_message: Message,
         metrics_reporter: Optional[IFLMetricsReporter] = None,
+        timeline: Optional[Timeline] = None,
     ) -> None:
         """Update each client-side model from server message."""
         ###########################
         self.client_deltas = []
         ############################
-        for client in clients:
+
+        for index, client in enumerate (clients):
+            # ========================Each client do evaluate at fo training before(boardcast the model to each client)================
+            # self.evaluate is wrapped. 
+            # with open("/home/shiyue/FLsim/results/eva_accuracy_per_round.txt", "a") as file:
+            #     global_model = self.server.global_model.fl_get_module().eval()
+            #     all_predictions = []
+            #     all_labels = []
+            
+            #     for batch in self.evaluate[index]._eval_batches:
+            #         predictions = global_model(batch['features'])
+
+            #         all_predictions.append(predictions)
+            #         all_labels.append(batch['labels'])
+
+            #     all_predictions = torch.cat(all_predictions)
+            #     all_labels = torch.cat(all_labels)
+            #     accuracy = self.calculate_accuracy(all_predictions, all_labels)
+                    
+            #     file.write(f"{accuracy}\n")
+            #=============================================================================================================================
+            # self.evaluate_data is raw data. 
+            with open("/home/shiyue/FLsim/results/eva_accuracy_per_round.txt", "a") as file:
+                global_model = self.server.global_model.fl_get_module().eval()
+                all_predictions = []
+                all_labels = []
+
+                data = self.evaluate_data[index]
+                # Define the batch size
+                batch_size = 32
+
+                # Calculate the number of slices needed
+                _index = str(index).zfill(4)
+                num_slices = math.ceil(len(data[_index]) / batch_size)
+
+                # Iterate through the data and create slices
+                for i in range(num_slices):
+                    start_idx = i * batch_size
+                    end_idx = (i + 1) * batch_size
+                    batch_data = data[_index][start_idx:end_idx]
+
+                    batch_features = []
+                    batch_labels = []
+
+                    for each_data in batch_data:
+                        batch_features.append(each_data['features'])
+                        batch_labels.append(each_data['labels'])
+
+                    stacked_features = torch.stack(batch_features)
+                    tensor_labels = torch.tensor(batch_labels)
+                    
+                    predictions = global_model(stacked_features)
+                    all_predictions.append(predictions)
+                    all_labels.append(tensor_labels)
+
+                all_predictions = torch.cat(all_predictions)
+                all_labels = torch.cat(all_labels)
+                accuracy = self.calculate_accuracy(all_predictions, all_labels)
+
+                    # for batch in self.evaluate_data[index]:
+                    #     predictions = global_model(batch['features'])
+
+                    #     all_predictions.append(predictions)
+                    #     all_labels.append(batch['labels'])
+
+                    # all_predictions = torch.cat(all_predictions)
+                    # all_labels = torch.cat(all_labels)
+                    # accuracy = self.calculate_accuracy(all_predictions, all_labels)
+                    
+                file.write(f"{accuracy}\n")
+            #==============================================================================================================================
+
+
             client_delta, weight = client.generate_local_update(
                 message=server_state_message,
                 metrics_reporter=metrics_reporter,
@@ -411,6 +497,8 @@ class SyncTrainer(FLTrainer):
             self.client_deltas.append(self._get_flat_params_from(client_delta.fl_get_module()))
             ###################################################################
             self.server.receive_update_from_client(Message(client_delta, weight))
+        
+
 
     def _train_one_round(
         self,
@@ -494,6 +582,7 @@ class SyncTrainer(FLTrainer):
             clients=clients,
             server_state_message=server_state_message,
             metrics_reporter=metrics_reporter,
+            timeline = timeline
         )
         self.logger.info(f"Collecting round's clients took {time() - t} s.")
 
@@ -521,6 +610,7 @@ class SyncTrainer(FLTrainer):
         #####################################################################
         self.logger.info(f"Finalizing round took {time() - t} s.")
         return server_return_metrics
+
 
     def _train_one_round_report_metrics(
         self,
