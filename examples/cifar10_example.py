@@ -27,17 +27,21 @@ from flsim.utils.example_utils import (
     FLModel,
     MetricsReporter,
     SimpleConvNet,
-    DataLoaderForNonIID
+    DataLoaderForNonIID,
+    Resnet18
 )
+
 from hydra.utils import instantiate
 from omegaconf import DictConfig, OmegaConf
 from torchvision import transforms
-from torchvision.datasets.cifar import CIFAR10,CIFAR100
 import numpy as np
 from flsim.data.dirichlet_data_patition import save_cifar10_party_data
+# from torchvision.models import resnet18
+## try to load local resnet18
 
 
 IMAGE_SIZE = 32
+intermediate_test_data = None
 
 
 def build_data_provider(local_batch_size, examples_per_user, drop_last: bool = False):
@@ -51,38 +55,41 @@ def build_data_provider(local_batch_size, examples_per_user, drop_last: bool = F
     #         transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
     #     ]
     # )
-    transform_train = transforms.Compose([
-    transforms.RandomCrop(32, padding=4),
-    transforms.RandomHorizontalFlip(),
-    transforms.ToTensor(),
-    transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
-    ])
+    # transform_train = transforms.Compose([
+    # transforms.RandomCrop(32, padding=4),
+    # transforms.RandomHorizontalFlip(),
+    # transforms.ToTensor(),
+    # transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+    # ])
 
-    transform_test = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
-    ])
+    # transform_test = transforms.Compose([
+    #     transforms.ToTensor(),
+    #     transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+    # ])
 
-    train_dataset = CIFAR10(
-        root="/home/shiyue/FLsim/cifar10", train=True, download=True, transform=transform_train
-    )
-    test_dataset = CIFAR10(
-        root="/home/shiyue/FLsim/cifar10", train=False, download=True, transform=transform_test
-    )
+    # train_dataset = CIFAR10(
+    #     root="/home/shiyue/FLsim/cifar10", train=True, download=True, transform=transform_train
+    # )
+    # test_dataset = CIFAR10(
+    #     root="/home/shiyue/FLsim/cifar10", train=False, download=True, transform=transform_test
+    # )
 
-    sharder = SequentialSharder(examples_per_shard=examples_per_user)
-    # sharder = RandomSharder(num_shards=10)
-    # sharder = PowerLawSharder(num_shards=10,alpha = 0.8)
+    # sharder = SequentialSharder(examples_per_shard=examples_per_user)
+    # # sharder = RandomSharder(num_shards=10)
+    # # sharder = PowerLawSharder(num_shards=10,alpha = 0.8)
 
-    fl_data_loader = DataLoader(train_dataset, test_dataset, test_dataset, sharder, local_batch_size, drop_last)
+    # fl_data_loader = DataLoader(train_dataset, test_dataset, test_dataset, sharder, local_batch_size, drop_last)
     #================================================================================================================
 
     #============================================== non iid=====================================================================
-    # client_num = 10
-    # dirichlet_alph = 0.9
-    # train_party_data_list,test_party_data_list = save_cifar10_party_data(client_num,examples_per_user,dirichlet_alph)
-    # sharder = SequentialSharder(examples_per_shard=examples_per_user)
-    # fl_data_loader = DataLoaderForNonIID(train_party_data_list, test_party_data_list, test_party_data_list, sharder, local_batch_size, drop_last)
+    client_num = 10
+    dirichlet_alph = 0.4
+    # dirichlet_alph = float('inf')
+    train_party_data_list,test_party_data_list = save_cifar10_party_data(client_num,examples_per_user,dirichlet_alph)
+    global intermediate_test_data
+    intermediate_test_data = test_party_data_list
+    sharder = SequentialSharder(examples_per_shard=examples_per_user)
+    fl_data_loader = DataLoaderForNonIID(train_party_data_list, test_party_data_list, test_party_data_list, sharder, local_batch_size, drop_last)
     #===========================================================================================================================
     
 
@@ -95,10 +102,13 @@ def main(
     data_config,
     use_cuda_if_available: bool = True,
 ) -> None:
+
     cuda_enabled = torch.cuda.is_available() and use_cuda_if_available
     device = torch.device(f"cuda:{0}" if cuda_enabled else "cpu")
     # model = SimpleConvNet(in_channels=3, num_classes=10)
-    model = torch.hub.load('pytorch/vision:v0.10.0', 'resnet18', pretrained=False)
+    model = Resnet18(num_classes=10)
+    # model = torch.hub.load('pytorch/vision:v0.10.0', 'vgg11', pretrained=True)
+    # model = torch.hub.load('pytorch/vision:v0.10.0', 'resnet18', pretrained=False)
 
 
     # pyre-fixme[6]: Expected `Optional[str]` for 2nd param but got `device`.
@@ -120,6 +130,7 @@ def main(
         metrics_reporter=metrics_reporter,
         num_total_users=data_provider.num_train_users(),
         distributed_world_size=1,
+        evaluate_data = intermediate_test_data
     )
 
     trainer.test(

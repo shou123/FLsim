@@ -22,10 +22,11 @@ from flsim.utils.data.data_utils import batchify
 from flsim.utils.simple_batch_metrics import FLBatchMetrics
 from torch import nn
 from torch.utils.data import Dataset
-from torchvision import transforms
+from torchvision import transforms,models
 from torchvision.datasets.cifar import CIFAR10
 from torchvision.datasets.vision import VisionDataset
 from tqdm import tqdm
+from opacus.validators.module_validator import ModuleValidator
 
 
 def collate_fn(batch: Tuple) -> Dict[str, Any]:
@@ -113,7 +114,7 @@ class DataLoaderForNonIID(IFLDataLoader):
         assert batch_size > 0, "Batch size should be a positive integer."
         self.train_party_data_list = train_party_data_list
         self.test_party_data_list = test_party_data_list
-        self.eval_party_datalist = eval_party_data_list
+        self.eval_party_data_list = eval_party_data_list
         self.batch_size = batch_size
         self.drop_last = drop_last
         self.sharder = sharder
@@ -125,7 +126,7 @@ class DataLoaderForNonIID(IFLDataLoader):
         yield from self._batchify(self.train_party_data_list, self.drop_last, world_size, rank)
 
     def fl_eval_set(self, **kwargs) -> Iterable[Dict[str, Generator]]:
-        yield from self._batchify(self.eval_party_datalist, drop_last=False)
+        yield from self._batchify(self.eval_party_data_list, drop_last=False)
 
     def fl_test_set(self, **kwargs) -> Iterable[Dict[str, Generator]]:
         yield from self._batchify(self.test_party_data_list, drop_last=False)
@@ -282,11 +283,11 @@ class DataProvider(IFLDataProvider):
     def __init__(self, data_loader):
         self.data_loader = data_loader
         fl_train_set = data_loader.fl_train_set()
-        self._train_users = self._create_fl_users(fl_train_set, eval_split=0.0)
+        self._train_users = self._create_fl_users(fl_train_set, eval_split=0.0,info="train")
         fl_eval_set = data_loader.fl_eval_set()
-        self._eval_users = self._create_fl_users(fl_eval_set, eval_split=1.0)
+        self._eval_users = self._create_fl_users(fl_eval_set, eval_split=1.0,info="eval")
         fl_test_set = data_loader.fl_test_set()
-        self._test_users = self._create_fl_users(fl_test_set, eval_split=1.0)
+        self._test_users = self._create_fl_users(fl_test_set, eval_split=1.0,info="test")
 
     def train_user_ids(self) -> List[int]:
         return list(self._train_users.keys())
@@ -315,12 +316,12 @@ class DataProvider(IFLDataProvider):
             yield user_data
 
     def _create_fl_users(
-        self, iterator: Iterator, eval_split: float = 0.0
+        self, iterator: Iterator, eval_split: float = 0.0,info:str = None
     ) -> Dict[int, IFLUserData]:
         return {
             user_index: UserData(user_data, eval_split=eval_split)
             for user_index, user_data in tqdm(
-                enumerate(iterator), desc="Creating FL User", unit="user"
+                enumerate(iterator), desc="Creating {} FL User".format(info), unit="user"
             )
         }
 
@@ -406,6 +407,18 @@ class SimpleConvNet(nn.Module):
         for s in size:
             num_features *= s
         return num_features
+
+
+class Resnet18(nn.Module):
+    def __init__(self, num_classes):
+        super().__init__()
+        self.backbone = models.resnet18()
+        # Replace batch norm with group norm
+        self.backbone = ModuleValidator.fix(self.backbone)
+        self.backbone.fc = nn.Linear(self.backbone.fc.in_features, num_classes)
+
+    def forward(self, x):
+        return self.backbone(x)
 
 
 class FLModel(IFLModel):
