@@ -205,7 +205,11 @@ class SyncTrainer(FLTrainer):
         users_per_round = min(self.cfg.users_per_round, num_total_users)
 
         self.data_provider = data_provider
-        num_rounds_in_epoch = self.rounds_in_one_epoch(num_total_users, users_per_round)
+        # num_rounds_in_epoch = self.rounds_in_one_epoch(num_total_users, users_per_round)
+
+        #=====================read num_rounds_in_epoch from cifar10_config.json=========================================
+        num_rounds_in_epoch = self.cfg.num_rounds_in_epoch
+        #===============================================================================================================
         num_users_on_worker = data_provider.num_train_users()
         self.logger.debug(
             f"num_users_on_worker: {num_users_on_worker}, "
@@ -418,14 +422,14 @@ class SyncTrainer(FLTrainer):
         ############################
 
         for index, client in enumerate (clients):
-            # ========================Each client do evaluate at fo training before(boardcast the model to each client)================
-            # self.evaluate is wrapped. 
+            # ==========================iid Each client do evaluate at fo training before(boardcast the model to each client)=====================
+            # dataset_index = index % len(self.evaluate)
             # with open("/home/shiyue/FLsim/results/eva_accuracy_per_round.txt", "a") as file:
             #     global_model = self.server.global_model.fl_get_module().eval()
             #     all_predictions = []
             #     all_labels = []
             
-            #     for batch in self.evaluate[index]._eval_batches:
+            #     for batch in self.evaluate[dataset_index]._eval_batches:
             #         predictions = global_model(batch['features'])
 
             #         all_predictions.append(predictions)
@@ -436,56 +440,67 @@ class SyncTrainer(FLTrainer):
             #     accuracy = self.calculate_accuracy(all_predictions, all_labels)
                     
             #     file.write(f"{accuracy}\n")
-            #=============================================================================================================================
-            # self.evaluate_data is raw data. 
+
+
+
+            # ========================non-iid Each client do evaluate at fo training before(boardcast the model to each client)================
+            # self.evaluate is wrapped. 
             with open("/home/shiyue/FLsim/results/eva_accuracy_per_round.txt", "a") as file:
                 global_model = self.server.global_model.fl_get_module().eval()
                 all_predictions = []
                 all_labels = []
+            
+                for batch in self.evaluate[index]._eval_batches:
+                    predictions = global_model(batch['features'])
 
-                data = self.evaluate_data[index]
-                # Define the batch size
-                batch_size = 32
-
-                # Calculate the number of slices needed
-                _index = str(index).zfill(4)
-                num_slices = math.ceil(len(data[_index]) / batch_size)
-
-                # Iterate through the data and create slices
-                for i in range(num_slices):
-                    start_idx = i * batch_size
-                    end_idx = (i + 1) * batch_size
-                    batch_data = data[_index][start_idx:end_idx]
-
-                    batch_features = []
-                    batch_labels = []
-
-                    for each_data in batch_data:
-                        batch_features.append(each_data['features'])
-                        batch_labels.append(each_data['labels'])
-
-                    stacked_features = torch.stack(batch_features)
-                    tensor_labels = torch.tensor(batch_labels)
-                    
-                    predictions = global_model(stacked_features)
                     all_predictions.append(predictions)
-                    all_labels.append(tensor_labels)
+                    all_labels.append(batch['labels'])
 
                 all_predictions = torch.cat(all_predictions)
                 all_labels = torch.cat(all_labels)
                 accuracy = self.calculate_accuracy(all_predictions, all_labels)
-
-                    # for batch in self.evaluate_data[index]:
-                    #     predictions = global_model(batch['features'])
-
-                    #     all_predictions.append(predictions)
-                    #     all_labels.append(batch['labels'])
-
-                    # all_predictions = torch.cat(all_predictions)
-                    # all_labels = torch.cat(all_labels)
-                    # accuracy = self.calculate_accuracy(all_predictions, all_labels)
                     
                 file.write(f"{accuracy}\n")
+            #=========================non-iid Each client do evaluate at fo training before(boardcast the model to each client)==============
+            # self.evaluate_data is raw data. 
+            # with open("/home/shiyue/FLsim/results/eva_accuracy_per_round.txt", "a") as file:
+            #     global_model = self.server.global_model.fl_get_module().eval()
+            #     all_predictions = []
+            #     all_labels = []
+
+            #     data = self.evaluate_data[index]
+            #     # Define the batch size
+            #     batch_size = 32
+
+            #     # Calculate the number of slices needed
+            #     _index = str(index).zfill(4)
+            #     num_slices = math.ceil(len(data[_index]) / batch_size)
+
+            #     # Iterate through the data and create slices
+            #     for i in range(num_slices):
+            #         start_idx = i * batch_size
+            #         end_idx = (i + 1) * batch_size
+            #         batch_data = data[_index][start_idx:end_idx]
+
+            #         batch_features = []
+            #         batch_labels = []
+
+            #         for each_data in batch_data:
+            #             batch_features.append(each_data['features'])
+            #             batch_labels.append(each_data['labels'])
+
+            #         stacked_features = torch.stack(batch_features)
+            #         tensor_labels = torch.tensor(batch_labels)
+                    
+            #         predictions = global_model(stacked_features)
+            #         all_predictions.append(predictions)
+            #         all_labels.append(tensor_labels)
+
+            #     all_predictions = torch.cat(all_predictions)
+            #     all_labels = torch.cat(all_labels)
+            #     accuracy = self.calculate_accuracy(all_predictions, all_labels)
+                    
+            #     file.write(f"{accuracy}\n")
             #==============================================================================================================================
 
 
@@ -981,6 +996,7 @@ class SyncTrainerConfig(FLTrainerConfig):
     _target_: str = fullclassname(SyncTrainer)
     server: SyncServerConfig = SyncServerConfig()
     users_per_round: int = 10
+    num_rounds_in_epoch:int = 1 #add this parameter for read num_rounds_in_epoch from cifar10.config.json
     # overselect users_per_round / dropout_rate users, only use first
     # users_per_round updates
     dropout_rate: float = 1.0

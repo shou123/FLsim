@@ -36,6 +36,6 @@
             "console": "integratedTerminal",
             "justMyCode": false,
             // "args": ["--config-file", "/home/shiyue/FLSim/examples/configs/cifar10_config.json"]
-        },
+        }
     ]
 }
