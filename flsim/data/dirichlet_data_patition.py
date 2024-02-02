@@ -5,7 +5,7 @@ import torchvision.transforms as transforms
 import torch
 
 # def save_cifar10_party_data(should_stratify, party_folder):
-def save_cifar10_party_data(client_number,sample_per_user,dirichlet_alph):
+def save_cifar10_party_data(client_number,sample_per_user,dirichlet_alph,data_type= "iid"):
     transform = transforms.Compose([transforms.ToTensor()])
 
     train_dataset = CIFAR10(
@@ -33,11 +33,17 @@ def save_cifar10_party_data(client_number,sample_per_user,dirichlet_alph):
 
     train_party_data_list = []
     test_party_data_list = []
+
     
     
     for idx, dp in enumerate(nb_dp_per_party):
+        if data_type == "iid":
+            equal_probability = 1.0 / len(labels)
+            proportions = np.full(len(labels), equal_probability)
+        elif data_type == "non_iid":
         #dirichlet distribution
-        proportions = np.random.dirichlet(np.repeat(dirichlet_alph, len(labels)))
+            proportions = np.random.dirichlet(np.repeat(dirichlet_alph, len(labels)))
+        
         train_probs = {label: proportions[label] for label in labels}
         #test_probs  = train_probs
         test_probs = train_probs

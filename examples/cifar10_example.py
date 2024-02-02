@@ -36,6 +36,7 @@ from omegaconf import DictConfig, OmegaConf
 from torchvision import transforms
 import numpy as np
 from flsim.data.dirichlet_data_patition import save_cifar10_party_data
+from torchvision.datasets.cifar import CIFAR10
 # from torchvision.models import resnet18
 ## try to load local resnet18
 
@@ -44,7 +45,7 @@ IMAGE_SIZE = 32
 intermediate_test_data = None
 
 
-def build_data_provider(local_batch_size, examples_per_user, drop_last: bool = False):
+def build_data_provider(local_batch_size, examples_per_user, drop_last: bool = False, total_client_num = 0):
 
     #============================================iid===============================================================
     # transform = transforms.Compose(
@@ -82,10 +83,11 @@ def build_data_provider(local_batch_size, examples_per_user, drop_last: bool = F
     #================================================================================================================
 
     #============================================== non iid=====================================================================
-    client_num = 10
-    dirichlet_alph = 0.4
+    total_client_num = total_client_num
+    data_type = "non_iid"
+    dirichlet_alph = 0.9
     # dirichlet_alph = float('inf')
-    train_party_data_list,test_party_data_list = save_cifar10_party_data(client_num,examples_per_user,dirichlet_alph)
+    train_party_data_list,test_party_data_list = save_cifar10_party_data(total_client_num,examples_per_user,dirichlet_alph,data_type = data_type)
     global intermediate_test_data
     intermediate_test_data = test_party_data_list
     sharder = SequentialSharder(examples_per_shard=examples_per_user)
@@ -119,6 +121,7 @@ def main(
     data_provider = build_data_provider(
         local_batch_size=data_config.local_batch_size,
         examples_per_user=data_config.examples_per_user,
+        total_client_num = data_config.total_client_num,
         # examples_per_user = trainer_config.users_per_round,
         drop_last=False,
     )
