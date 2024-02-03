@@ -389,6 +389,13 @@ class SyncTrainer(FLTrainer):
             data_provider=data_provider,
             global_round_num=timeline.global_round_num(),
         )
+
+        file_path = "/home/shiyue/FLsim/results/client_selection_log.txt"
+
+        # Open the file in append mode and write the information
+        with open(file_path, 'a') as file:
+            file.write(str(self._user_indices_overselected)+'\n')
+
         clients_to_train = [
             self.create_or_get_client_for_data(i, self.data_provider)
             for i in self._user_indices_overselected
