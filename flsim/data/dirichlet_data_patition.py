@@ -59,7 +59,9 @@ def save_cifar10_party_data(client_number,sample_per_user,dirichlet_alph,data_ty
         train_indices = np.random.choice(num_train, dp, p=train_p)
         test_p = np.array([test_probs[y_test[idx]] for idx in range(num_test)])
         test_p /= np.sum(test_p)
-        test_indices = np.random.choice(num_test, int(num_test / nb_parties), p=test_p)
+        # test_indices = np.random.choice(num_test, int(num_test / nb_parties), p=test_p)
+        test_indices = np.random.choice(num_test, int(num_test / len(labels)), p=test_p) #change the test dataset for num_test = 10,000/10 = 1000
+
 
         # # Split test evenly
         # test_indices = np.random.choice(
@@ -86,7 +88,9 @@ def save_cifar10_party_data(client_number,sample_per_user,dirichlet_alph,data_ty
 
                     # Split test evenly
             train_samples = [{'features': train_tensor_data_normalized[i], 'labels': int(y_train_pi[i])} for i in range(dp)]
-            test_samples = [{'features': test_tensor_data_normalized[i], 'labels': int(y_test_pi[i])} for i in range(int(num_test / nb_parties))]
+            # test_samples = [{'features': test_tensor_data_normalized[i], 'labels': int(y_test_pi[i])} for i in range(int(num_test / nb_parties))]
+            test_samples = [{'features': test_tensor_data_normalized[i], 'labels': int(y_test_pi[i])} for i in range(int(num_test / len(labels)))] #change the test dataset for num_test = 10,000/10 = 1000
+
 
             train_party_data_list.append({f"{idx:04d}": train_samples})
             test_party_data_list.append({f"{idx:04d}": test_samples})
