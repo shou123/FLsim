@@ -185,6 +185,7 @@ class SyncTrainer(FLTrainer):
         """
         self.evaluate_data = evaluate_data # this is from raw test data
         self.evaluate = data_provider._eval_users # this is from test data wrapper
+        self.train_user_ids = data_provider.train_user_ids()
 
 
 
@@ -428,6 +429,44 @@ class SyncTrainer(FLTrainer):
         self.client_deltas = []
         ############################
 
+        #===========================================evaluate accuracy for partial selection client with all evaluation data==============================================
+        with open("/home/shiyue/FLsim/results/eva_accuracy_per_round.txt", "a") as file:
+            global_model = self.server.global_model.fl_get_module().eval()
+
+            all_predictions_list = []
+            all_labels_list = []
+
+            for i in self.train_user_ids:
+                data = self.evaluate_data[i]
+                _index = str(i).zfill(4)
+
+                batch_features = []
+                batch_labels = []
+
+                for each_data in data[_index]:
+                    batch_features.append(each_data['features'])
+                    batch_labels.append(each_data['labels'])
+
+                stacked_features = torch.stack(batch_features)
+                tensor_labels = torch.tensor(batch_labels)
+
+                predictions = global_model(stacked_features)
+                all_predictions_list.append(predictions)
+                all_labels_list.append(tensor_labels)
+
+            all_predictions = torch.cat(all_predictions_list)
+            all_labels = torch.cat(all_labels_list)
+
+            accuracy = self.calculate_accuracy(all_predictions, all_labels)
+
+            list_predictions = all_predictions.tolist()
+            list_labels = all_labels.tolist()
+
+            file.write(f"{accuracy}\n")
+
+        #========================================================================================================================================
+
+
         for index, client in enumerate (clients):
             # ==========================iid Each client do evaluate at fo training before(boardcast the model to each client)=====================
             # dataset_index = index % len(self.evaluate)
@@ -448,26 +487,26 @@ class SyncTrainer(FLTrainer):
                     
             #     file.write(f"{accuracy}\n")
 
-
-
             # ========================non-iid Each client do evaluate at fo training before(boardcast the model to each client)================
             # self.evaluate is wrapped. 
-            with open("/home/shiyue/FLsim/results/eva_accuracy_per_round.txt", "a") as file:
-                global_model = self.server.global_model.fl_get_module().eval()
-                all_predictions = []
-                all_labels = []
+            # with open("/home/shiyue/FLsim/results/eva_accuracy_per_round.txt", "a") as file:
+            #     global_model = self.server.global_model.fl_get_module().eval()
+            #     all_predictions = []
+            #     all_labels = []
             
-                for batch in self.evaluate[index]._eval_batches:
-                    predictions = global_model(batch['features'])
+            #     for batch in self.evaluate[index]._eval_batches:
+            #         predictions = global_model(batch['features'])
 
-                    all_predictions.append(predictions)
-                    all_labels.append(batch['labels'])
+            #         all_predictions.append(predictions)
+            #         all_labels.append(batch['labels'])
 
-                all_predictions = torch.cat(all_predictions)
-                all_labels = torch.cat(all_labels)
-                accuracy = self.calculate_accuracy(all_predictions, all_labels)
+            #     all_predictions = torch.cat(all_predictions)
+            #     all_labels = torch.cat(all_labels)
+            #     accuracy = self.calculate_accuracy(all_predictions, all_labels)
                     
-                file.write(f"{accuracy}\n")
+            #     file.write(f"{accuracy}\n")
+
+
             #=========================non-iid Each client do evaluate at fo training before(boardcast the model to each client)==============
             # self.evaluate_data is raw data. 
             # with open("/home/shiyue/FLsim/results/eva_accuracy_per_round.txt", "a") as file:
@@ -508,9 +547,8 @@ class SyncTrainer(FLTrainer):
             #     accuracy = self.calculate_accuracy(all_predictions, all_labels)
                     
             #     file.write(f"{accuracy}\n")
-            #==============================================================================================================================
-
-
+            #=======================================================================================================================================
+  
             client_delta, weight = client.generate_local_update(
                 message=server_state_message,
                 metrics_reporter=metrics_reporter,
