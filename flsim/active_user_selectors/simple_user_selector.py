@@ -163,8 +163,8 @@ class ActiveUserSelector(abc.ABC):
         inputs = []
         for key in required_inputs:
             if key == "num_samples_per_user":
-                array_length = 100
-                input = [500]*array_length
+                array_length = kwargs.get("num_total_users",None)
+                input = [5000]*array_length #sample size per user
 
             else:
                 input = kwargs.get(key, None)
