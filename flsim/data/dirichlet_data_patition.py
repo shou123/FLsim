@@ -9,10 +9,10 @@ def save_cifar10_party_data(client_number,sample_per_user,dirichlet_alph,data_ty
     transform = transforms.Compose([transforms.ToTensor()])
 
     train_dataset = CIFAR10(
-        root="/home/shiyue/FLsim/cifar10", train=True, download=True, transform=transform
+        root="/home/shiyue/FLsim/cifar10", train=True, download=False, transform=transform
     )
     test_dataset = CIFAR10(
-        root="/home/shiyue/FLsim/cifar10", train=False, download=True, transform=transform
+        root="/home/shiyue/FLsim/cifar10", train=False, download=False, transform=transform
     )
 
     client_number = client_number
