@@ -236,6 +236,7 @@ class SyncTrainer(FLTrainer):
         for epoch in tqdm(
             range(1, num_int_epochs + 1), desc="Epoch", unit="epoch", position=0
         ):
+            self.epoch_num = epoch
             for round in tqdm(
                 range(1, num_rounds_in_epoch + 1),
                 desc="Round",
@@ -663,8 +664,11 @@ class SyncTrainer(FLTrainer):
         with open("/home/shiyue/FLsim/results/distance_values.txt", "a") as file:
             for client_del, i in zip(self.client_deltas, self._user_indices_overselected):
                 distance.append(((before - client_del) - global_after).norm('fro'))
-                print("Client {}'s norm: {}.".format(i, distance[-1]))
-                client_norm_info = "Client {}'s norm: {}\n".format(i, distance[-1])
+                # print("Global_round: {}, Client {}'s norm: {}.".format(self.epoch_num,i, distance[-1]))
+                print("Global_round: {}, Client: {}, norm: {}.".format(self.epoch_num,i, distance[-1]))
+                # client_norm_info = "Global_round: {},Client {}'s norm: {}\n".format(self.epoch_num,i, distance[-1])
+                client_norm_info = "Global_round: {}, Client: {}, norm: {}\n".format(self.epoch_num,i, distance[-1])
+
                 file.write(client_norm_info)
 
         #####################################################################
