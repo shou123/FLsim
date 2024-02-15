@@ -28,7 +28,8 @@ from flsim.utils.example_utils import (
     MetricsReporter,
     SimpleConvNet,
     DataLoaderForNonIID,
-    Resnet18
+    Resnet18,
+    Test_Net
 )
 
 from hydra.utils import instantiate
@@ -84,9 +85,9 @@ def build_data_provider(local_batch_size, examples_per_user, drop_last: bool = F
 
     #============================================== non iid=====================================================================
     total_client_num = total_client_num
-    # data_type = "non_iid"
-    data_type = "iid"
-    dirichlet_alph = 0.9
+    data_type = "non_iid"
+    # data_type = "iid"
+    dirichlet_alph = 0.1
     # dirichlet_alph = float('inf')
     train_party_data_list,test_party_data_list = save_cifar10_party_data(total_client_num,examples_per_user,dirichlet_alph,data_type = data_type)
     global intermediate_test_data
@@ -108,10 +109,11 @@ def main(
 
     cuda_enabled = torch.cuda.is_available() and use_cuda_if_available
     device = torch.device(f"cuda:{0}" if cuda_enabled else "cpu")
-    # model = SimpleConvNet(in_channels=3, num_classes=10)
-    model = Resnet18(num_classes=10)
+    # model = SimpleConvNet(in_channels=3, num_classes=10) #This is my original model
+    # model = Resnet18(num_classes=10)
     # model = torch.hub.load('pytorch/vision:v0.10.0', 'vgg11', pretrained=True)
     # model = torch.hub.load('pytorch/vision:v0.10.0', 'resnet18', pretrained=False)
+    model = Test_Net() # This model is CNN from Allen
 
 
     # pyre-fixme[6]: Expected `Optional[str]` for 2nd param but got `device`.
