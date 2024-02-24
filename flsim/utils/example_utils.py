@@ -77,7 +77,7 @@ class DataLoader(IFLDataLoader):
     ) -> Generator[Dict[str, Generator], None, None]:
         # pyre-fixme[16]: `VisionDataset` has no attribute `__iter__`.
         data_rows: List[Dict[str, Any]] = [self.collate_fn(batch) for batch in dataset]
-        with open("/home/shiyue/FLsim/results/client_data_size.txt", "a") as file:
+        with open("./results/client_data_size.txt", "a") as file:
             # for loop to user_data is according to the sample_per_user to get the data. user_data is list, for each element there is 2 dictionary
             for client_id, (client_index, user_data) in enumerate(self.sharder.shard_rows(data_rows)):
                 print(f"client: {client_index}, data_size: {len(user_data)}")
@@ -139,7 +139,7 @@ class DataLoaderForNonIID(IFLDataLoader):
         rank: int = 0,
     ) -> Generator[Dict[str, Generator], None, None]:
         # pyre-fixme[16]: `VisionDataset` has no attribute `__iter__`.
-        with open("/home/shiyue/FLsim/results/client_data_size.txt", "a") as file:
+        with open("./client_data_size.txt", "a") as file:
             for client_id, party_data_dict in enumerate(party_data_list):
                 client_index, user_data = next(iter(party_data_dict.items()))
 
@@ -523,7 +523,7 @@ class MetricsReporter(FLMetricsReporter):
 
     def compare_metrics(self, eval_metrics, best_metrics):
         print(f"Current eval accuracy: {eval_metrics}%, Best so far: {best_metrics}%")
-        with open("/home/shiyue/FLsim/results/accuracy_trend.txt", "a") as file:
+        with open("./results/accuracy_trend.txt", "a") as file:
             file.write(f"{eval_metrics}\n")
         
         if best_metrics is None:
