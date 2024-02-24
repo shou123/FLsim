@@ -75,7 +75,7 @@ def save_cifar10_party_data(client_number,sample_per_user,dirichlet_alph,data_ty
         train_tensor_data_normalized = (torch.from_numpy(x_train_pi).float() / 255.0).permute(0,3,1,2)
         test_tensor_data_normalized = (torch.from_numpy(x_test_pi).float() / 255.0).permute(0,3,1,2)
 
-        with open("/home/shiyue/FLsim/results/non-iid_data_distribution.txt", "a") as file:
+        with open("./results/non-iid_data_distribution.txt", "a") as file:
             for l in range(num_labels):
                 print('Client',idx,'* Train Label ', l, ' samples: ', (y_train_pi == l).sum())
                 file.write(f'Client {idx}: Train Label {l}, samples: {(y_train_pi == l).sum()}\n')
