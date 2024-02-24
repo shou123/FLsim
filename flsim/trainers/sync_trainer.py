@@ -186,8 +186,7 @@ class SyncTrainer(FLTrainer):
         self.evaluate_data = evaluate_data # this is from raw test data
         self.evaluate = data_provider._eval_users # this is from test data wrapper
         self.train_user_ids = data_provider.train_user_ids()
-
-
+        self.num_total_users = num_total_users
 
         # Set up synchronization utilities for distributed training
         FLDistributedUtils.setup_distributed_training(
@@ -208,9 +207,9 @@ class SyncTrainer(FLTrainer):
         self.data_provider = data_provider
         # num_rounds_in_epoch = self.rounds_in_one_epoch(num_total_users, users_per_round)
 
-        #=====================read num_rounds_in_epoch from cifar10_config.json=========================================
+        #=====================read num_rounds_in_epoch from cifar10_config.json, num_rounds_in_epoch define local round======================
         num_rounds_in_epoch = self.cfg.num_rounds_in_epoch
-        #===============================================================================================================
+        #====================================================================================================================================
         num_users_on_worker = data_provider.num_train_users()
         self.logger.debug(
             f"num_users_on_worker: {num_users_on_worker}, "
@@ -221,7 +220,12 @@ class SyncTrainer(FLTrainer):
         users_per_round_on_worker = int(users_per_round / distributed_world_size)
         self._validate_users_per_round(users_per_round_on_worker, num_users_on_worker)
 
+        #=======================this parameter save the mdoels==========================
+        self.client_local_model = []
+        #===============================================================================
+
         self.logger.info("Start training")
+        print("Start training")
         if self.logger.isEnabledFor(logging.DEBUG):
             norm = FLModelParamUtils.debug_model_norm(
                 self.global_model().fl_get_module()
@@ -232,7 +236,7 @@ class SyncTrainer(FLTrainer):
             )
 
         # Main training loop
-        num_int_epochs = math.ceil(self.cfg.epochs)
+        num_int_epochs = math.ceil(self.cfg.epochs)         # num_int_epochs define how many global round. 
         for epoch in tqdm(
             range(1, num_int_epochs + 1), desc="Epoch", unit="epoch", position=0
         ):
@@ -254,12 +258,25 @@ class SyncTrainer(FLTrainer):
 
                 # Select clients for training this round
                 t = time()
+
+                #================================================original client selection=================================================
                 clients = self._client_selection(
                     num_users=num_users_on_worker,
                     users_per_round=users_per_round_on_worker,
                     data_provider=data_provider,
                     timeline=timeline,
                 )
+
+                #================================================select clients for new select algo========================================
+                # clients = self._client_selection_largest_distance(
+                #     num_users=num_users_on_worker,
+                #     users_per_round=users_per_round_on_worker,
+                #     data_provider=data_provider,
+                #     timeline=timeline,
+                #     client_local_model = self.client_local_model,
+                #     select_percentage=0.8
+                # )
+                #==========================================================================================================================
                 self.logger.info(f"Client Selection took: {time() - t} s.")
 
                 # Select clients for calculating post-aggregation *training* metrics
@@ -392,7 +409,7 @@ class SyncTrainer(FLTrainer):
             global_round_num=timeline.global_round_num(),
         )
 
-        file_path = "/home/shiyue/FLsim/results/client_selection_log.txt"
+        file_path = "./results/client_selection_log.txt"
 
         # Open the file in append mode and write the information
         with open(file_path, 'a') as file:
@@ -407,6 +424,93 @@ class SyncTrainer(FLTrainer):
                 clients_to_train, users_per_round
             )
         return clients_to_train
+
+        #===============================================
+    def _client_selection_largest_distance(
+        self,
+        num_users: int,
+        users_per_round: int,
+        data_provider: IFLDataProvider,
+        timeline: Timeline,
+        client_local_model:List[Dict] = [],
+        select_percentage:float = 0.0,
+    ) -> List[Client]:
+        """Select client for training each round."""
+        # pyre-fixme[16]: `SyncTrainer` has no attribute `cfg`.
+        num_users_overselected = math.ceil(users_per_round / self.cfg.dropout_rate)
+        # pyre-fixme[16]: `SyncTrainer` has no attribute `_user_indices_overselected`.
+        user_indices = []
+        self._user_indices_overselected = []
+        #at the first round, if client_local_model bucket is empty, select all client to training and save the ;oca; models
+        if len(client_local_model)== 0:
+            for i in range (users_per_round):
+                user_indices.append(i)
+                self._user_indices_overselected = user_indices
+            
+            file_path = "./results/client_selection_log.txt"
+            # Open the file in append mode and write the information
+            with open(file_path, 'a') as file:
+                file.write(str(self._user_indices_overselected)+'\n')
+
+            clients_to_train = [
+            self.create_or_get_client_for_data(i, self.data_provider)
+            for i in self._user_indices_overselected
+            ]
+
+
+            if not math.isclose(self.cfg.dropout_rate, 1.0):
+                clients_to_train = self._drop_overselected_users(
+                clients_to_train, users_per_round
+            )
+        else:
+            # at the second round or later, according to the client model to calculate distance, distance = (global model-local model).norm('fro')
+            global_model = self._get_flat_params_from(self.server.global_model.fl_get_module())
+            # List to store Frobenius norms and corresponding keys
+            clients_distance = []
+
+            # Iterate over each dictionary in self.client_model_deltas
+            for client_model in self.client_local_model:
+                for key, value in client_model.items():
+                    # Subtract the value from global_model
+                    distance = global_model - value
+                    frobenius_norm = distance.norm('fro')
+                    # Append the Frobenius norm and corresponding key to the list
+                    clients_distance.append((key, frobenius_norm.item()))
+
+            # Sort client distance and according to selected percentage to select clients
+            sorted_clients_distance = sorted(clients_distance, key=lambda x: x[1], reverse=True)
+            with open("./results/sorted_client_distance.txt", "a") as file:
+                for client, distance in sorted_clients_distance:
+                    client_norm_info = "Global_round: {}, Client: {}, distance: {}\n".format(self.epoch_num,client, distance)
+                    file.write(client_norm_info)
+
+            # Calculate the total number of elements to select (80% of the total)
+            total_elements = int(select_percentage * len(sorted_clients_distance))
+
+            # Select the top 80% largest values along with their corresponding keys
+            for key, _ in sorted_clients_distance[0:total_elements]:
+               self._user_indices_overselected.append(key)
+            # self._user_indices_overselected = [key for key, _ in sorted_clients_distance[0:total_elements]]
+
+            file_path = "./results/client_selection_log.txt"
+            # Open the file in append mode and write the information
+            with open(file_path, 'a') as file:
+                file.write(str(self._user_indices_overselected)+'\n')
+
+            clients_to_train = [
+            self.create_or_get_client_for_data(i, self.data_provider)
+            for i in self._user_indices_overselected
+            ]
+
+
+            if not math.isclose(self.cfg.dropout_rate, 1.0):
+                clients_to_train = self._drop_overselected_users(
+                clients_to_train, users_per_round
+            )
+
+            # Return the selected keys
+        return clients_to_train
+        #===============================================
 
     def _save_model_and_metrics(self, model: IFLModel, best_model_state):
         model.fl_get_module().load_state_dict(best_model_state)
@@ -431,7 +535,7 @@ class SyncTrainer(FLTrainer):
         ############################
 
         #===========================================evaluate accuracy for partial selection client with all evaluation data==============================================
-        with open("/home/shiyue/FLsim/results/eva_accuracy_per_round.txt", "a") as file:
+        with open("./results/eva_accuracy_per_round.txt", "a") as file:
             global_model = self.server.global_model.fl_get_module().eval()
 
             all_predictions_list = []
@@ -463,7 +567,27 @@ class SyncTrainer(FLTrainer):
             list_predictions = all_predictions.tolist()
             list_labels = all_labels.tolist()
 
-            file.write(f"{accuracy}\n")
+            # Assuming `self.cfg.server.active_user_selector._target_` is defined and `accuracy` is obtained from your model's performance
+
+            # Initialize renamed_selector variable
+            renamed_selector = ""
+            target = self.cfg.server.active_user_selector._target_
+
+            # Use if-else to determine the renamed_selector based on the target value
+            if target == 'flsim.active_user_selectors.simple_user_selector.UniformlyRandomActiveUserSelector':
+                renamed_selector = 'uniform_random_selection'
+            elif target == 'flsim.active_user_selectors.sequential_user_selector.SequentialActiveUserSelectorConfig':
+                renamed_selector = 'sequential_selection'
+            elif target == 'flsim.active_user_selectors.random_round_robin_user_selector.RandomRoundRobinActiveUserSelectorConfig':
+                renamed_selector = 'random_round_robin_selection'
+            elif target == 'flsim.active_user_selectors.importance_sampling_user_selector.ImportanceSamplingActiveUserSelectorConfig':
+                renamed_selector = 'importance_sampling_selection'
+            elif target == 'flsim.active_user_selectors.random_multistep_user_selector.RandomMultiStepActiveUserSelectorConfig':
+                renamed_selector = 'radom_multistep_selection'
+            else:
+                renamed_selector = "largest_distance_client_selection" 
+
+            file.write(f"{renamed_selector}, total_user: {self.num_total_users}, user_per_round: {self.cfg.users_per_round}, accuracy: {accuracy*100:.2f}\n")
 
         #========================================================================================================================================
 
@@ -471,7 +595,7 @@ class SyncTrainer(FLTrainer):
         for index, client in enumerate (clients):
             # ==========================iid Each client do evaluate at fo training before(boardcast the model to each client)=====================
             # dataset_index = index % len(self.evaluate)
-            # with open("/home/shiyue/FLsim/results/eva_accuracy_per_round.txt", "a") as file:
+            # with open("./results/eva_accuracy_per_round.txt", "a") as file:
             #     global_model = self.server.global_model.fl_get_module().eval()
             #     all_predictions = []
             #     all_labels = []
@@ -490,7 +614,7 @@ class SyncTrainer(FLTrainer):
 
             # ========================non-iid Each client do evaluate at fo training before(boardcast the model to each client)================
             # self.evaluate is wrapped. 
-            # with open("/home/shiyue/FLsim/results/eva_accuracy_per_round.txt", "a") as file:
+            # with open("./results/eva_accuracy_per_round.txt", "a") as file:
             #     global_model = self.server.global_model.fl_get_module().eval()
             #     all_predictions = []
             #     all_labels = []
@@ -510,7 +634,7 @@ class SyncTrainer(FLTrainer):
 
             #=========================non-iid Each client do evaluate at fo training before(boardcast the model to each client)==============
             # self.evaluate_data is raw data. 
-            # with open("/home/shiyue/FLsim/results/eva_accuracy_per_round.txt", "a") as file:
+            # with open("./results/eva_accuracy_per_round.txt", "a") as file:
             #     global_model = self.server.global_model.fl_get_module().eval()
             #     all_predictions = []
             #     all_labels = []
@@ -557,6 +681,7 @@ class SyncTrainer(FLTrainer):
             ##################################################################
             self.client_deltas.append(self._get_flat_params_from(client_delta.fl_get_module()))
             ###################################################################
+        
             self.server.receive_update_from_client(Message(client_delta, weight))
         
 
@@ -653,20 +778,37 @@ class SyncTrainer(FLTrainer):
         ####################################################################
         global_after = self._get_flat_params_from(self.server.global_model.fl_get_module())
         distance = []
-        # with open("/home/shiyue/FLSim/results/distance_values.txt", "a") as file:
-        #     for ind, client_del in enumerate(self.client_deltas):
-        #         distance.append(((before-client_del)-global_after).norm('fro'))
+
+        #=================================for general client selection algo calculate whole distance===================================
+        with open("./results/distance_values.txt", "a") as file:
+            for ind, client_del in enumerate(self.client_deltas):
+                distance.append(((before-client_del)-global_after).norm('fro'))
                 
-        #         for i in self._user_indices_overselected:
-        #             print("Client {}'s norm: {}.".format(i,distance[-1]))
-        #             client_norm_info = "Client {}'s norm: {}\n".format(i, distance[-1])
-        #             file.write(client_norm_info)
-        with open("/home/shiyue/FLsim/results/distance_values.txt", "a") as file:
+                for i in self._user_indices_overselected:
+                    print("Client {}'s norm: {}.".format(i,distance[-1]))
+                    client_norm_info = "Client {}'s norm: {}\n".format(i, distance[-1])
+                    file.write(client_norm_info)
+
+        #=======This is collect after training models for each client and append to self.client_local_model for largest distance client selection======      
+        with open("./results/largest_client_selection_distance_values.txt", "a") as file:
             for client_del, i in zip(self.client_deltas, self._user_indices_overselected):
+                # self.client_local_model.append({i:before - client_del}) #save each client local model
+                #before - client_del is after training updated model
+                if not self.client_local_model:  # 如果self.client_local_model为空
+                    self.client_local_model.append({i: before - client_del})
+                else:
+                    found = False
+                    for item in self.client_local_model:
+                        if i in item:  # 如果i对应的key存在于self.client_local_model中
+                            item[i] = before - client_del  # 替换对应的值
+                            found = True
+                            break
+                    if not found:
+                        self.client_local_model.append({i: before - client_del})
+
+        #================================below distance append is for general client distance
                 distance.append(((before - client_del) - global_after).norm('fro'))
-                # print("Global_round: {}, Client {}'s norm: {}.".format(self.epoch_num,i, distance[-1]))
-                print("Global_round: {}, Client: {}, norm: {}.".format(self.epoch_num,i, distance[-1]))
-                # client_norm_info = "Global_round: {},Client {}'s norm: {}\n".format(self.epoch_num,i, distance[-1])
+                # print("Global_round: {}, Client: {}, norm: {}.".format(self.epoch_num,i, distance[-1]))
                 client_norm_info = "Global_round: {}, Client: {}, norm: {}\n".format(self.epoch_num,i, distance[-1])
 
                 file.write(client_norm_info)
