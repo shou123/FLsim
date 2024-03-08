@@ -87,7 +87,7 @@ def build_data_provider(local_batch_size, examples_per_user, drop_last: bool = F
     total_client_num = total_client_num
     data_type = "non_iid"
     # data_type = "iid"
-    dirichlet_alph = 0.1
+    dirichlet_alph = 0.9
     # dirichlet_alph = float('inf')
     train_party_data_list,test_party_data_list = save_cifar10_party_data(total_client_num,examples_per_user,dirichlet_alph,data_type = data_type)
     global intermediate_test_data
@@ -161,3 +161,6 @@ def run(cfg: DictConfig) -> None:
 if __name__ == "__main__":
     cfg = maybe_parse_json_config()
     run(cfg)
+
+
+

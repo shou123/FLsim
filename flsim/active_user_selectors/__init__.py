@@ -13,6 +13,7 @@ from .simple_user_selector import (
     RandomRoundRobinActiveUserSelectorConfig,
     SequentialActiveUserSelectorConfig,
     UniformlyRandomActiveUserSelectorConfig,
+    LargestDistanceActiveUserSelectorConfig,
 )
 
 
@@ -46,5 +47,11 @@ ConfigStore.instance().store(
 ConfigStore.instance().store(
     name="base_random_multi_step_active_user_selector",
     node=RandomMultiStepActiveUserSelectorConfig,
+    group="active_user_selector",
+)
+
+ConfigStore.instance().store(
+    name="base_largest_disntace_active_user_selector",
+    node=LargestDistanceActiveUserSelectorConfig,
     group="active_user_selector",
 )

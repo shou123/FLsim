@@ -187,6 +187,8 @@ class SyncTrainer(FLTrainer):
         self.evaluate = data_provider._eval_users # this is from test data wrapper
         self.train_user_ids = data_provider.train_user_ids()
         self.num_total_users = num_total_users
+        self.client_local_model = []
+
 
         # Set up synchronization utilities for distributed training
         FLDistributedUtils.setup_distributed_training(
@@ -219,10 +221,6 @@ class SyncTrainer(FLTrainer):
         # torch.multinomial requires int instead of float; cast it as int
         users_per_round_on_worker = int(users_per_round / distributed_world_size)
         self._validate_users_per_round(users_per_round_on_worker, num_users_on_worker)
-
-        #=======================this parameter save the mdoels==========================
-        self.client_local_model = []
-        #===============================================================================
 
         self.logger.info("Start training")
         print("Start training")
@@ -258,13 +256,17 @@ class SyncTrainer(FLTrainer):
 
                 # Select clients for training this round
                 t = time()
-
+                new_model = self._get_flat_params_from(self.server.global_model.fl_get_module())#flated global model
                 #================================================original client selection=================================================
                 clients = self._client_selection(
                     num_users=num_users_on_worker,
                     users_per_round=users_per_round_on_worker,
                     data_provider=data_provider,
                     timeline=timeline,
+                    client_local_model = self.client_local_model,
+                    select_percentage=0.8,
+                    global_model = new_model,
+                    epoch_num = self.epoch_num
                 )
 
                 #================================================select clients for new select algo========================================
@@ -274,7 +276,7 @@ class SyncTrainer(FLTrainer):
                 #     data_provider=data_provider,
                 #     timeline=timeline,
                 #     client_local_model = self.client_local_model,
-                #     select_percentage=0.8
+                #     select_percentage=0.4
                 # )
                 #==========================================================================================================================
                 self.logger.info(f"Client Selection took: {time() - t} s.")
@@ -391,12 +393,54 @@ class SyncTrainer(FLTrainer):
 
         return clients_used
 
+    # def _client_selection(
+    #     self,
+    #     num_users: int,
+    #     users_per_round: int,
+    #     data_provider: IFLDataProvider,
+    #     timeline: Timeline,
+    #     select_percentage:float = 0.0,
+    #     client_local_model:List[Dict] = [],
+    # ) -> List[Client]:
+    #     """Select client for training each round."""
+    #     # pyre-fixme[16]: `SyncTrainer` has no attribute `cfg`.
+    #     num_users_overselected = math.ceil(users_per_round / self.cfg.dropout_rate)
+    #     # pyre-fixme[16]: `SyncTrainer` has no attribute `_user_indices_overselected`.
+    #     self._user_indices_overselected = self.server.select_clients_for_training(
+    #         num_total_users=num_users,
+    #         users_per_round=num_users_overselected,
+    #         data_provider=data_provider,
+    #         global_round_num=timeline.global_round_num(),
+    #     )
+
+    #     file_path = "./results/client_selection_log.txt"
+
+    #     self.client_selection_stype = "client_selection"
+
+    #     # Open the file in append mode and write the information
+    #     with open(file_path, 'a') as file:
+    #         file.write(str(self._user_indices_overselected)+'\n')
+
+    #     clients_to_train = [
+    #         self.create_or_get_client_for_data(i, self.data_provider)
+    #         for i in self._user_indices_overselected
+    #     ]
+    #     if not math.isclose(self.cfg.dropout_rate, 1.0):
+    #         clients_to_train = self._drop_overselected_users(
+    #             clients_to_train, users_per_round
+    #         )
+    #     return clients_to_train
+
     def _client_selection(
         self,
         num_users: int,
         users_per_round: int,
         data_provider: IFLDataProvider,
         timeline: Timeline,
+        select_percentage:float = 0.0,
+        client_local_model:List[Dict] = [],
+        global_model:torch.Tensor = [],
+        epoch_num:int = 0
     ) -> List[Client]:
         """Select client for training each round."""
         # pyre-fixme[16]: `SyncTrainer` has no attribute `cfg`.
@@ -407,10 +451,18 @@ class SyncTrainer(FLTrainer):
             users_per_round=num_users_overselected,
             data_provider=data_provider,
             global_round_num=timeline.global_round_num(),
+            select_percentage = select_percentage,
+            client_local_model = client_local_model,
+            global_model = global_model,
+            epoch_num = epoch_num
         )
+        if select_percentage != 0:
+            self.total_elements = int(select_percentage * num_users)
 
         file_path = "./results/client_selection_log.txt"
+        self.client_selection_stype = "client_selection"
 
+        
         # Open the file in append mode and write the information
         with open(file_path, 'a') as file:
             file.write(str(self._user_indices_overselected)+'\n')
@@ -437,8 +489,10 @@ class SyncTrainer(FLTrainer):
     ) -> List[Client]:
         """Select client for training each round."""
         # pyre-fixme[16]: `SyncTrainer` has no attribute `cfg`.
+        self.client_selection_stype = "largest_disntance_client_selection"
         num_users_overselected = math.ceil(users_per_round / self.cfg.dropout_rate)
         # pyre-fixme[16]: `SyncTrainer` has no attribute `_user_indices_overselected`.
+        self.total_elements = int(select_percentage * num_users_overselected)
         user_indices = []
         self._user_indices_overselected = []
         #at the first round, if client_local_model bucket is empty, select all client to training and save the ;oca; models
@@ -485,10 +539,10 @@ class SyncTrainer(FLTrainer):
                     file.write(client_norm_info)
 
             # Calculate the total number of elements to select (80% of the total)
-            total_elements = int(select_percentage * len(sorted_clients_distance))
+            self.total_elements = int(select_percentage * len(sorted_clients_distance))
 
             # Select the top 80% largest values along with their corresponding keys
-            for key, _ in sorted_clients_distance[0:total_elements]:
+            for key, _ in sorted_clients_distance[0:self.total_elements]:
                self._user_indices_overselected.append(key)
             # self._user_indices_overselected = [key for key, _ in sorted_clients_distance[0:total_elements]]
 
@@ -567,11 +621,16 @@ class SyncTrainer(FLTrainer):
             list_predictions = all_predictions.tolist()
             list_labels = all_labels.tolist()
 
+            #======================================================================================================================================
+
             # Assuming `self.cfg.server.active_user_selector._target_` is defined and `accuracy` is obtained from your model's performance
 
             # Initialize renamed_selector variable
             renamed_selector = ""
-            target = self.cfg.server.active_user_selector._target_
+            if self.client_selection_stype == "largest_disntance_client_selection":
+                target = "other"
+            else:
+                target = self.cfg.server.active_user_selector._target_
 
             # Use if-else to determine the renamed_selector based on the target value
             if target == 'flsim.active_user_selectors.simple_user_selector.UniformlyRandomActiveUserSelector':
@@ -584,10 +643,14 @@ class SyncTrainer(FLTrainer):
                 renamed_selector = 'importance_sampling_selection'
             elif target == 'flsim.active_user_selectors.random_multistep_user_selector.RandomMultiStepActiveUserSelectorConfig':
                 renamed_selector = 'radom_multistep_selection'
-            else:
-                renamed_selector = "largest_distance_client_selection" 
+            elif target == 'flsim.active_user_selectors.simple_user_selector.LargestDistanceActiveUserSelector':
+                renamed_selector = 'largest_distance_client_selection'
 
-            file.write(f"{renamed_selector}, total_user: {self.num_total_users}, user_per_round: {self.cfg.users_per_round}, accuracy: {accuracy*100:.2f}\n")
+
+            if renamed_selector == "largest_distance_client_selection":
+                file.write(f"{renamed_selector}, total_user: {self.num_total_users}, user_per_round: {self.total_elements}, accuracy: {accuracy*100:.2f}\n")
+            else:
+                file.write(f"{renamed_selector}, total_user: {self.num_total_users}, user_per_round: {self.cfg.users_per_round}, accuracy: {accuracy*100:.2f}\n")
 
         #========================================================================================================================================
 
@@ -614,38 +677,39 @@ class SyncTrainer(FLTrainer):
 
             # ========================non-iid Each client do evaluate at fo training before(boardcast the model to each client)================
             # self.evaluate is wrapped. 
-            # with open("./results/eva_accuracy_per_round.txt", "a") as file:
-            #     global_model = self.server.global_model.fl_get_module().eval()
-            #     all_predictions = []
-            #     all_labels = []
+            with open("./results/eva_accuracy_for_each_local_client.txt", "a") as file:
+                local_model = self.server.global_model.fl_get_module().eval()
+                all_predictions = []
+                all_labels = []
             
-            #     for batch in self.evaluate[index]._eval_batches:
-            #         predictions = global_model(batch['features'])
+                for batch in self.evaluate[index]._eval_batches:
+                    predictions = local_model(batch['features'])
 
-            #         all_predictions.append(predictions)
-            #         all_labels.append(batch['labels'])
+                    all_predictions.append(predictions)
+                    all_labels.append(batch['labels'])
 
-            #     all_predictions = torch.cat(all_predictions)
-            #     all_labels = torch.cat(all_labels)
-            #     accuracy = self.calculate_accuracy(all_predictions, all_labels)
+                all_predictions = torch.cat(all_predictions)
+                all_labels = torch.cat(all_labels)
+                accuracy = self.calculate_accuracy(all_predictions, all_labels)
                     
-            #     file.write(f"{accuracy}\n")
+                file.write(f"global_round: {self.epoch_num}, user_id: {index}, accuracy: {accuracy}\n")
+
 
 
             #=========================non-iid Each client do evaluate at fo training before(boardcast the model to each client)==============
             # self.evaluate_data is raw data. 
-            # with open("./results/eva_accuracy_per_round.txt", "a") as file:
+            # with open("./results/eva_accuracy_for_each_local_client.txt", "a") as file:
             #     global_model = self.server.global_model.fl_get_module().eval()
             #     all_predictions = []
             #     all_labels = []
 
-            #     data = self.evaluate_data[index]
+            #     data = self.evaluate_data[index] #according to the index to get the evaluate data
             #     # Define the batch size
             #     batch_size = 32
 
             #     # Calculate the number of slices needed
-            #     _index = str(index).zfill(4)
-            #     num_slices = math.ceil(len(data[_index]) / batch_size)
+            #     _index = str(index).zfill(4) #change the index format to '0000'
+            #     num_slices = math.ceil(len(data[_index]) / batch_size) #cut the evaluate data to the num_slices, num_slices = 32
 
             #     # Iterate through the data and create slices
             #     for i in range(num_slices):
@@ -663,6 +727,7 @@ class SyncTrainer(FLTrainer):
             #         stacked_features = torch.stack(batch_features)
             #         tensor_labels = torch.tensor(batch_labels)
                     
+            #         # evaluate the model by evaluate data
             #         predictions = global_model(stacked_features)
             #         all_predictions.append(predictions)
             #         all_labels.append(tensor_labels)
@@ -671,7 +736,7 @@ class SyncTrainer(FLTrainer):
             #     all_labels = torch.cat(all_labels)
             #     accuracy = self.calculate_accuracy(all_predictions, all_labels)
                     
-            #     file.write(f"{accuracy}\n")
+            #     file.write(f"global_round: {self.epoch_num}, user_id: {index}, accuracy: {accuracy}\n")
             #=======================================================================================================================================
   
             client_delta, weight = client.generate_local_update(
@@ -784,10 +849,9 @@ class SyncTrainer(FLTrainer):
             for ind, client_del in enumerate(self.client_deltas):
                 distance.append(((before-client_del)-global_after).norm('fro'))
                 
-                for i in self._user_indices_overselected:
-                    print("Client {}'s norm: {}.".format(i,distance[-1]))
-                    client_norm_info = "Client {}'s norm: {}\n".format(i, distance[-1])
-                    file.write(client_norm_info)
+            for i in self._user_indices_overselected:
+                print(f"global_round: {self.epoch_num},client_id: {i}, distance: {distance[i]}")
+                file.write(f"global_round: {self.epoch_num},client_id: {i}, distance: {distance[i]}\n")
 
         #=======This is collect after training models for each client and append to self.client_local_model for largest distance client selection======      
         with open("./results/largest_client_selection_distance_values.txt", "a") as file:
@@ -807,7 +871,6 @@ class SyncTrainer(FLTrainer):
                         self.client_local_model.append({i: before - client_del})
 
         #================================below distance append is for general client distance
-                distance.append(((before - client_del) - global_after).norm('fro'))
                 # print("Global_round: {}, Client: {}, norm: {}.".format(self.epoch_num,i, distance[-1]))
                 client_norm_info = "Global_round: {}, Client: {}, norm: {}\n".format(self.epoch_num,i, distance[-1])
 

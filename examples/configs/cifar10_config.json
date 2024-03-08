@@ -2,7 +2,7 @@
   "config": {
     "trainer": {
       "_base_": "base_sync_trainer",
-      "epochs":20,
+      "epochs":100,
       "num_rounds_in_epoch":1
       , 
       "server": {
@@ -13,7 +13,7 @@
           "momentum": 0.9
         },
         "active_user_selector": {
-          "_base_": "base_sequential_active_user_selector"
+          "_base_": "base_largest_disntace_active_user_selector"
         }
       },
       "client": {
@@ -24,7 +24,7 @@
           "momentum": 0
         }
       },
-      "users_per_round": 5,
+      "users_per_round": 10,
       "train_metrics_reported_per_epoch": 1,
       "always_keep_trained_model": false,
       "report_train_metrics": true,

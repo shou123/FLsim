@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from typing import Dict, Iterable, List, Optional, Tuple
 
 import torch.nn as nn
+import torch
 from flsim.active_user_selectors.simple_user_selector import (
     ActiveUserSelectorConfig,
     UniformlyRandomActiveUserSelectorConfig,
@@ -182,12 +183,20 @@ class SyncServer(ISyncServer):
         users_per_round,
         data_provider: Optional[IFLDataProvider] = None,
         global_round_num: Optional[int] = None,
+        select_percentage:float = 0.0,
+        client_local_model:List[Dict] = [],
+        global_model:torch.Tensor = [],
+        epoch_num:int = 0
     ):
         return self._active_user_selector.get_user_indices(
             num_total_users=num_total_users,
             users_per_round=users_per_round,
             data_provider=data_provider,
             global_round_num=global_round_num,
+            select_percentage=select_percentage,
+            client_local_model = client_local_model,
+            global_model = global_model,
+            epoch_num = epoch_num
         )
 
     def init_round(self):
