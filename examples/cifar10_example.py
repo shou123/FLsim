@@ -46,7 +46,7 @@ IMAGE_SIZE = 32
 intermediate_test_data = None
 
 
-def build_data_provider(local_batch_size, examples_per_user, drop_last: bool = False, total_client_num = 0):
+def build_data_provider(local_batch_size, examples_per_user,data_type,dirichlet_alph, drop_last: bool = False, total_client_num = 0):
 
     #============================================iid===============================================================
     # transform = transforms.Compose(
@@ -85,11 +85,10 @@ def build_data_provider(local_batch_size, examples_per_user, drop_last: bool = F
 
     #============================================== non iid=====================================================================
     total_client_num = total_client_num
-    data_type = "non_iid"
+    # data_type = "non_iid"
     # data_type = "iid"
-    dirichlet_alph = 0.9
-    # dirichlet_alph = float('inf')
-    train_party_data_list,test_party_data_list = save_cifar10_party_data(total_client_num,examples_per_user,dirichlet_alph,data_type = data_type)
+    # dirichlet_alph = 0.4
+    train_party_data_list,test_party_data_list = save_cifar10_party_data(total_client_num,examples_per_user,dirichlet_alph = dirichlet_alph,data_type = data_type)
     global intermediate_test_data
     intermediate_test_data = test_party_data_list
     sharder = SequentialSharder(examples_per_shard=examples_per_user)
@@ -115,6 +114,16 @@ def main(
     # model = torch.hub.load('pytorch/vision:v0.10.0', 'resnet18', pretrained=False)
     model = Test_Net() # This model is CNN from Allen
 
+    # define the data sample type
+    data_type = "non_iid"
+    # data_type = "iid"
+
+    #define non iid data dirichlet_alph value 
+    dirichlet_alph = 0.4
+
+    #set for largest_distance_select_persentage
+    largest_distance_select_persentage = 0.4 
+
 
     # pyre-fixme[6]: Expected `Optional[str]` for 2nd param but got `device`.
     global_model = FLModel(model, device)
@@ -127,6 +136,8 @@ def main(
         total_client_num = data_config.total_client_num,
         # examples_per_user = trainer_config.users_per_round,
         drop_last=False,
+        data_type = data_type,
+        dirichlet_alph = dirichlet_alph,
     )
 
     metrics_reporter = MetricsReporter([Channel.TENSORBOARD, Channel.STDOUT])
@@ -136,7 +147,8 @@ def main(
         metrics_reporter=metrics_reporter,
         num_total_users=data_provider.num_train_users(),
         distributed_world_size=1,
-        evaluate_data = intermediate_test_data
+        evaluate_data = intermediate_test_data,
+        largest_distance_select_percentage = largest_distance_select_persentage
     )
 
     trainer.test(
