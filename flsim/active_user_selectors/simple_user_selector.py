@@ -475,7 +475,7 @@ class LargestDistanceActiveUserSelector(ActiveUserSelector):
 
             # Sort client distance and according to selected percentage to select clients
             sorted_clients_distance = sorted(clients_distance, key=lambda x: x[1], reverse=True)
-            with open("./results/sorted_client_distance.txt", 'a') as file:
+            with open("results/sorted_client_distance.txt", 'a') as file:
                 for client, distance in sorted_clients_distance:
                     client_norm_info = "Global_round: {}, Client: {}, distance: {}\n".format(epoch_num,client, distance)
                     file.write(client_norm_info)
