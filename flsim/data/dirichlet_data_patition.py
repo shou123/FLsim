@@ -5,7 +5,7 @@ import torchvision.transforms as transforms
 import torch
 
 # def save_cifar10_party_data(should_stratify, party_folder):
-def save_cifar10_party_data(client_number,sample_per_user,dirichlet_alph,data_type= "iid"):
+def save_cifar10_party_data(client_number,sample_per_user,dirichlet_alph,data_type:str):
     transform = transforms.Compose([transforms.ToTensor()])
 
     train_dataset = CIFAR10(
