@@ -155,6 +155,7 @@ class SyncTrainer(FLTrainer):
         distributed_world_size: int,
         evaluate_data: List[Any],
         rank: int = 0,
+        largest_distance_select_percentage:float = 0.0,
     ) -> Tuple[IFLModel, Any]:
         """Trains and evaluates the model, modifying the model state. Iterates over the
         number of epochs specified in the config, and for each epoch iterates over the
@@ -183,6 +184,7 @@ class SyncTrainer(FLTrainer):
             Depending on the chosen active user selector, we may not iterate over
             all users in a given epoch.
         """
+
         self.evaluate_data = evaluate_data # this is from raw test data
         self.evaluate = data_provider._eval_users # this is from test data wrapper
         self.train_user_ids = data_provider.train_user_ids()
@@ -264,7 +266,7 @@ class SyncTrainer(FLTrainer):
                     data_provider=data_provider,
                     timeline=timeline,
                     client_local_model = self.client_local_model,
-                    select_percentage=0.8,
+                    select_percentage=largest_distance_select_percentage,
                     global_model = new_model,
                     epoch_num = self.epoch_num
                 )
@@ -595,6 +597,9 @@ class SyncTrainer(FLTrainer):
             all_predictions_list = []
             all_labels_list = []
 
+            cuda_enabled = torch.cuda.is_available()
+            device = torch.device(f"cuda:{0}" if cuda_enabled else "cpu")
+
             for i in self.train_user_ids:
                 data = self.evaluate_data[i]
                 _index = str(i).zfill(4)
@@ -602,12 +607,19 @@ class SyncTrainer(FLTrainer):
                 batch_features = []
                 batch_labels = []
 
+
+
                 for each_data in data[_index]:
                     batch_features.append(each_data['features'])
                     batch_labels.append(each_data['labels'])
 
                 stacked_features = torch.stack(batch_features)
                 tensor_labels = torch.tensor(batch_labels)
+
+                #============pass the data label and data feature to the cuda===========
+                stacked_features = stacked_features.to(device.type)
+                tensor_labels = tensor_labels.to(device.type)
+                #=======================================================================
 
                 predictions = global_model(stacked_features)
                 all_predictions_list.append(predictions)
@@ -683,10 +695,10 @@ class SyncTrainer(FLTrainer):
                 all_labels = []
             
                 for batch in self.evaluate[index]._eval_batches:
-                    predictions = local_model(batch['features'])
+                    predictions = local_model((batch['features']).to(device.type)) #move the feature tensor to cuda or cpu
 
                     all_predictions.append(predictions)
-                    all_labels.append(batch['labels'])
+                    all_labels.append((batch['labels']).to(device.type))
 
                 all_predictions = torch.cat(all_predictions)
                 all_labels = torch.cat(all_labels)
@@ -845,13 +857,16 @@ class SyncTrainer(FLTrainer):
         distance = []
 
         #=================================for general client selection algo calculate whole distance===================================
-        with open("./results/distance_values.txt", "a") as file:
-            for ind, client_del in enumerate(self.client_deltas):
-                distance.append(((before-client_del)-global_after).norm('fro'))
+        # with open("./results/distance_values.txt", "a") as file:
+        #     for ind, client_del in enumerate(self.client_deltas):
+        #         distance.append(((before-client_del)-global_after).norm('fro'))
                 
-            for i in self._user_indices_overselected:
-                print(f"global_round: {self.epoch_num},client_id: {i}, distance: {distance[i]}")
-                file.write(f"global_round: {self.epoch_num},client_id: {i}, distance: {distance[i]}\n")
+        #     for i in self._user_indices_overselected:
+        #         # print(f"global_round: {self.epoch_num},client_id: {i}, distance: {distance[i]}")
+                
+        #         client_norm_info = "Global_round: {}, Client: {}, norm: {}\n".format(self.epoch_num,i, distance[i])   
+        #         print(client_norm_info) 
+        #         file.write(client_norm_info)
 
         #=======This is collect after training models for each client and append to self.client_local_model for largest distance client selection======      
         with open("./results/largest_client_selection_distance_values.txt", "a") as file:
@@ -871,9 +886,9 @@ class SyncTrainer(FLTrainer):
                         self.client_local_model.append({i: before - client_del})
 
         #================================below distance append is for general client distance
-                # print("Global_round: {}, Client: {}, norm: {}.".format(self.epoch_num,i, distance[-1]))
+                distance.append(((before - client_del) - global_after).norm('fro'))
+                print("Global_round: {}, Client: {}, norm: {}.".format(self.epoch_num,i, distance[-1]))
                 client_norm_info = "Global_round: {}, Client: {}, norm: {}\n".format(self.epoch_num,i, distance[-1])
-
                 file.write(client_norm_info)
 
         #####################################################################
