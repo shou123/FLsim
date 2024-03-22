@@ -480,92 +480,92 @@ class SyncTrainer(FLTrainer):
         return clients_to_train
 
         #===============================================
-    def _client_selection_largest_distance(
-        self,
-        num_users: int,
-        users_per_round: int,
-        data_provider: IFLDataProvider,
-        timeline: Timeline,
-        client_local_model:List[Dict] = [],
-        select_percentage:float = 0.0,
-    ) -> List[Client]:
-        """Select client for training each round."""
-        # pyre-fixme[16]: `SyncTrainer` has no attribute `cfg`.
-        self.client_selection_stype = "largest_disntance_client_selection"
-        num_users_overselected = math.ceil(users_per_round / self.cfg.dropout_rate)
-        # pyre-fixme[16]: `SyncTrainer` has no attribute `_user_indices_overselected`.
-        self.total_elements = int(select_percentage * num_users_overselected)
-        user_indices = []
-        self._user_indices_overselected = []
-        #at the first round, if client_local_model bucket is empty, select all client to training and save the ;oca; models
-        if len(client_local_model)== 0:
-            for i in range (users_per_round):
-                user_indices.append(i)
-                self._user_indices_overselected = user_indices
+    # def _client_selection_largest_distance(
+    #     self,
+    #     num_users: int,
+    #     users_per_round: int,
+    #     data_provider: IFLDataProvider,
+    #     timeline: Timeline,
+    #     client_local_model:List[Dict] = [],
+    #     select_percentage:float = 0.0,
+    # ) -> List[Client]:
+    #     """Select client for training each round."""
+    #     # pyre-fixme[16]: `SyncTrainer` has no attribute `cfg`.
+    #     self.client_selection_stype = "largest_disntance_client_selection"
+    #     num_users_overselected = math.ceil(users_per_round / self.cfg.dropout_rate)
+    #     # pyre-fixme[16]: `SyncTrainer` has no attribute `_user_indices_overselected`.
+    #     self.total_elements = int(select_percentage * num_users_overselected)
+    #     user_indices = []
+    #     self._user_indices_overselected = []
+    #     #at the first round, if client_local_model bucket is empty, select all client to training and save the ;oca; models
+    #     if len(client_local_model)== 0:
+    #         for i in range (users_per_round):
+    #             user_indices.append(i)
+    #             self._user_indices_overselected = user_indices
             
-            file_path = "./results/client_selection_log.txt"
-            # Open the file in append mode and write the information
-            with open(file_path, 'a') as file:
-                file.write(str(self._user_indices_overselected)+'\n')
+    #         file_path = "./results/client_selection_log.txt"
+    #         # Open the file in append mode and write the information
+    #         with open(file_path, 'a') as file:
+    #             file.write(str(self._user_indices_overselected)+'\n')
 
-            clients_to_train = [
-            self.create_or_get_client_for_data(i, self.data_provider)
-            for i in self._user_indices_overselected
-            ]
-
-
-            if not math.isclose(self.cfg.dropout_rate, 1.0):
-                clients_to_train = self._drop_overselected_users(
-                clients_to_train, users_per_round
-            )
-        else:
-            # at the second round or later, according to the client model to calculate distance, distance = (global model-local model).norm('fro')
-            global_model = self._get_flat_params_from(self.server.global_model.fl_get_module())
-            # List to store Frobenius norms and corresponding keys
-            clients_distance = []
-
-            # Iterate over each dictionary in self.client_model_deltas
-            for client_model in self.client_local_model:
-                for key, value in client_model.items():
-                    # Subtract the value from global_model
-                    distance = global_model - value
-                    frobenius_norm = distance.norm('fro')
-                    # Append the Frobenius norm and corresponding key to the list
-                    clients_distance.append((key, frobenius_norm.item()))
-
-            # Sort client distance and according to selected percentage to select clients
-            sorted_clients_distance = sorted(clients_distance, key=lambda x: x[1], reverse=True)
-            with open("./results/sorted_client_distance.txt", "a") as file:
-                for client, distance in sorted_clients_distance:
-                    client_norm_info = "Global_round: {}, Client: {}, distance: {}\n".format(self.epoch_num,client, distance)
-                    file.write(client_norm_info)
-
-            # Calculate the total number of elements to select (80% of the total)
-            self.total_elements = int(select_percentage * len(sorted_clients_distance))
-
-            # Select the top 80% largest values along with their corresponding keys
-            for key, _ in sorted_clients_distance[0:self.total_elements]:
-               self._user_indices_overselected.append(key)
-            # self._user_indices_overselected = [key for key, _ in sorted_clients_distance[0:total_elements]]
-
-            file_path = "./results/client_selection_log.txt"
-            # Open the file in append mode and write the information
-            with open(file_path, 'a') as file:
-                file.write(str(self._user_indices_overselected)+'\n')
-
-            clients_to_train = [
-            self.create_or_get_client_for_data(i, self.data_provider)
-            for i in self._user_indices_overselected
-            ]
+    #         clients_to_train = [
+    #         self.create_or_get_client_for_data(i, self.data_provider)
+    #         for i in self._user_indices_overselected
+    #         ]
 
 
-            if not math.isclose(self.cfg.dropout_rate, 1.0):
-                clients_to_train = self._drop_overselected_users(
-                clients_to_train, users_per_round
-            )
+    #         if not math.isclose(self.cfg.dropout_rate, 1.0):
+    #             clients_to_train = self._drop_overselected_users(
+    #             clients_to_train, users_per_round
+    #         )
+    #     else:
+    #         # at the second round or later, according to the client model to calculate distance, distance = (global model-local model).norm('fro')
+    #         global_model = self._get_flat_params_from(self.server.global_model.fl_get_module())
+    #         # List to store Frobenius norms and corresponding keys
+    #         clients_distance = []
 
-            # Return the selected keys
-        return clients_to_train
+    #         # Iterate over each dictionary in self.client_model_deltas
+    #         for client_model in self.client_local_model:
+    #             for key, value in client_model.items():
+    #                 # Subtract the value from global_model
+    #                 distance = global_model - value
+    #                 frobenius_norm = distance.norm('fro')
+    #                 # Append the Frobenius norm and corresponding key to the list
+    #                 clients_distance.append((key, frobenius_norm.item()))
+
+    #         # Sort client distance and according to selected percentage to select clients
+    #         sorted_clients_distance = sorted(clients_distance, key=lambda x: x[1], reverse=True)
+    #         with open("./results/sorted_client_distance.txt", "a") as file:
+    #             for client, distance in sorted_clients_distance:
+    #                 client_norm_info = "Global_round: {}, Client: {}, distance: {}\n".format(self.epoch_num,client, distance)
+    #                 file.write(client_norm_info)
+
+    #         # Calculate the total number of elements to select (80% of the total)
+    #         self.total_elements = int(select_percentage * len(sorted_clients_distance))
+
+    #         # Select the top 80% largest values along with their corresponding keys
+    #         for key, _ in sorted_clients_distance[0:self.total_elements]:
+    #            self._user_indices_overselected.append(key)
+    #         # self._user_indices_overselected = [key for key, _ in sorted_clients_distance[0:total_elements]]
+
+    #         file_path = "./results/client_selection_log.txt"
+    #         # Open the file in append mode and write the information
+    #         with open(file_path, 'a') as file:
+    #             file.write(str(self._user_indices_overselected)+'\n')
+
+    #         clients_to_train = [
+    #         self.create_or_get_client_for_data(i, self.data_provider)
+    #         for i in self._user_indices_overselected
+    #         ]
+
+
+    #         if not math.isclose(self.cfg.dropout_rate, 1.0):
+    #             clients_to_train = self._drop_overselected_users(
+    #             clients_to_train, users_per_round
+    #         )
+
+    #         # Return the selected keys
+    #     return clients_to_train
         #===============================================
 
     def _save_model_and_metrics(self, model: IFLModel, best_model_state):

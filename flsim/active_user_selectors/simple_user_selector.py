@@ -425,6 +425,69 @@ class RandomMultiStepActiveUserSelector(ActiveUserSelector):
 
 
 class LargestDistanceActiveUserSelector(ActiveUserSelector):
+    """According to the distance between global module and local module to select client
+    """
+
+    def __init__(self, **kwargs):
+        init_self_cfg(
+            self,
+            component_class=__class__,
+            config_class=LargestDistanceActiveUserSelectorConfig,
+            **kwargs,
+        )
+
+        super().__init__(**kwargs)
+        self.cur_round_user_index = 0
+
+    @classmethod
+    def _set_defaults_in_cfg(cls, cfg):
+        pass
+
+    def get_user_indices(self, **kwargs) -> List[int]:
+        required_inputs = ["num_total_users", "users_per_round","select_percentage","client_local_model","global_model","epoch_num"]
+        num_total_users, users_per_round,select_percentage, client_local_model,global_model,epoch_num= self.unpack_required_inputs(
+            required_inputs, kwargs
+        )
+
+        total_elements = int(select_percentage * num_total_users)
+        user_indices = []
+        self._user_indices_overselected = []
+        #at the first round, if client_local_model bucket is empty, select all client to training and save the ;oca; models
+        if len(client_local_model)== 0:
+            for i in range (num_total_users):
+                user_indices.append(i)
+                self._user_indices_overselected = user_indices
+        
+        else:
+            # List to store Frobenius norms and corresponding keys
+            clients_distance = []
+
+            # Iterate over each dictionary in self.client_model_deltas
+            for client_model in client_local_model:
+                for key, value in client_model.items():
+                    # Subtract the value from global_model
+                    distance = global_model - value
+                    frobenius_norm = distance.norm('fro')
+                    # Append the Frobenius norm and corresponding key to the list
+                    clients_distance.append((key, frobenius_norm.item()))
+
+            # Sort client distance and according to selected percentage to select clients
+            sorted_clients_distance = sorted(clients_distance, key=lambda x: x[1], reverse=True)
+            with open("results/sorted_client_distance.txt", 'a') as file:
+                for client, distance in sorted_clients_distance:
+                    client_norm_info = "Global_round: {}, Client: {}, distance: {}\n".format(epoch_num,client, distance)
+                    file.write(client_norm_info)
+
+            # Select the top 80% largest values along with their corresponding keys
+            for key, _ in sorted_clients_distance[0:total_elements]:
+               self._user_indices_overselected.append(key)
+
+    
+        print(f"client index: {self._user_indices_overselected}")
+        return self._user_indices_overselected
+
+
+class ModuleLayerActiveUserSelector(ActiveUserSelector):
     """Simple User Selector which chooses users in sequential manner.
     e.g. if 2 users (user0 and user1) were trained in the previous round,
     the next 2 users (user2 and user3) will be picked in the current round.
@@ -434,7 +497,7 @@ class LargestDistanceActiveUserSelector(ActiveUserSelector):
         init_self_cfg(
             self,
             component_class=__class__,
-            config_class=SequentialActiveUserSelectorConfig,
+            config_class=ModuleLayerActiveUserSelectorConfig,
             **kwargs,
         )
 
@@ -529,4 +592,8 @@ class RandomMultiStepActiveUserSelectorConfig(ActiveUserSelectorConfig):
 @dataclass
 class LargestDistanceActiveUserSelectorConfig(ActiveUserSelectorConfig):
     _target_: str = fullclassname(LargestDistanceActiveUserSelector)
+
+@dataclass
+class ModuleLayerActiveUserSelectorConfig(ActiveUserSelectorConfig):
+    _target_: str = fullclassname(ModuleLayerActiveUserSelector)
 
