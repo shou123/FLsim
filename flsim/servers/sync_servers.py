@@ -181,12 +181,15 @@ class SyncServer(ISyncServer):
         self,
         num_total_users,
         users_per_round,
+        learnable_layers: List[int],
+        global_model_instance: IFLModel,
         data_provider: Optional[IFLDataProvider] = None,
         global_round_num: Optional[int] = None,
         select_percentage:float = 0.0,
         client_local_model:List[Dict] = [],
         global_model:torch.Tensor = [],
-        epoch_num:int = 0
+        epoch_num:int = 0,
+        total_updated_models_instance:List[any] = [],
     ):
         return self._active_user_selector.get_user_indices(
             num_total_users=num_total_users,
@@ -196,7 +199,10 @@ class SyncServer(ISyncServer):
             select_percentage=select_percentage,
             client_local_model = client_local_model,
             global_model = global_model,
-            epoch_num = epoch_num
+            epoch_num = epoch_num,
+            learnable_layers = learnable_layers,
+            global_model_instance = global_model_instance,
+            total_updated_models_instance = total_updated_models_instance
         )
 
     def init_round(self):

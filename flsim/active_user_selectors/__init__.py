@@ -14,6 +14,7 @@ from .simple_user_selector import (
     SequentialActiveUserSelectorConfig,
     UniformlyRandomActiveUserSelectorConfig,
     LargestDistanceActiveUserSelectorConfig,
+    ModelLayerActiveUserSelectorConfig
 )
 
 
@@ -53,5 +54,11 @@ ConfigStore.instance().store(
 ConfigStore.instance().store(
     name="base_largest_disntace_active_user_selector",
     node=LargestDistanceActiveUserSelectorConfig,
+    group="active_user_selector",
+)
+
+ConfigStore.instance().store(
+    name="base_model_layer_active_user_selector",
+    node=ModelLayerActiveUserSelectorConfig,
     group="active_user_selector",
 )

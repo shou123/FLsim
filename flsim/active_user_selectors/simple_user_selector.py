@@ -20,6 +20,9 @@ from flsim.utils.config_utils import fullclassname, init_self_cfg
 from omegaconf import MISSING
 
 import random
+import re
+
+
 
 
 
@@ -175,21 +178,6 @@ class ActiveUserSelector(abc.ABC):
             )
             inputs.append(input)
         return inputs
-
-
-    # def unpack_required_inputs(
-    #     self, required_inputs: List[str], kwargs: Dict[str, Any]
-    # ) -> List[Any]:
-    #     inputs = []
-    #     for key in required_inputs:
-    #         input = kwargs.get(key, None)
-    #         assert (
-    #             input is not None
-    #         ), "Input `{}` is required for get_user_indices in active_user_selector {}.".format(
-    #             key, self.__class__.__name__
-    #         )
-    #         inputs.append(input)
-    #     return inputs
 
 
 class UniformlyRandomActiveUserSelector(ActiveUserSelector):
@@ -487,7 +475,7 @@ class LargestDistanceActiveUserSelector(ActiveUserSelector):
         return self._user_indices_overselected
 
 
-class ModuleLayerActiveUserSelector(ActiveUserSelector):
+class ModelLayerActiveUserSelector(ActiveUserSelector):
     """Simple User Selector which chooses users in sequential manner.
     e.g. if 2 users (user0 and user1) were trained in the previous round,
     the next 2 users (user2 and user3) will be picked in the current round.
@@ -497,7 +485,7 @@ class ModuleLayerActiveUserSelector(ActiveUserSelector):
         init_self_cfg(
             self,
             component_class=__class__,
-            config_class=ModuleLayerActiveUserSelectorConfig,
+            config_class=ModelLayerActiveUserSelectorConfig,
             **kwargs,
         )
 
@@ -509,45 +497,59 @@ class ModuleLayerActiveUserSelector(ActiveUserSelector):
         pass
 
     def get_user_indices(self, **kwargs) -> List[int]:
-        required_inputs = ["num_total_users", "users_per_round","select_percentage","client_local_model","global_model","epoch_num"]
-        num_total_users, users_per_round,select_percentage, client_local_model,global_model,epoch_num= self.unpack_required_inputs(
+        required_inputs = ["num_total_users", "users_per_round","select_percentage","total_updated_models_instance","global_model_instance","epoch_num", "learnable_layers"]
+        num_total_users, users_per_round,select_percentage, total_updated_models_instance,global_model_instance,epoch_num,learnable_layers= self.unpack_required_inputs(
             required_inputs, kwargs
         )
 
         total_elements = int(select_percentage * num_total_users)
         user_indices = []
         self._user_indices_overselected = []
-        #at the first round, if client_local_model bucket is empty, select all client to training and save the ;oca; models
-        if len(client_local_model)== 0:
+        # at the first round, if client_local_model bucket is empty, select all client to training and save the ;oca; models
+        if len(total_updated_models_instance)== 0:
             for i in range (num_total_users):
                 user_indices.append(i)
                 self._user_indices_overselected = user_indices
         
         else:
             # List to store Frobenius norms and corresponding keys
-            clients_distance = []
+            distance = []
+
 
             # Iterate over each dictionary in self.client_model_deltas
-            for client_model in client_local_model:
-                for key, value in client_model.items():
-                    # Subtract the value from global_model
-                    distance = global_model - value
-                    frobenius_norm = distance.norm('fro')
-                    # Append the Frobenius norm and corresponding key to the list
-                    clients_distance.append((key, frobenius_norm.item()))
+            for client_id,client_model in enumerate(total_updated_models_instance):
+                client_paras = []
+                global_paras = []
+                for layer_index, (client_layer, server_layer) in enumerate(zip(client_model.fl_get_module().state_dict(), global_model_instance.fl_get_module().state_dict())):
+                    if 'weight' in client_layer and 'weight' in server_layer:
+                        match = re.search(r'\.(\d+)\.', client_layer) #to get the number of 'network.16.weight'
+                        if match:
+                            number = match.group(1)
+                            if int(number) in learnable_layers:
+                                client_model_layer_tensor = client_model.fl_get_module().state_dict()[client_layer]
+                                global_model_layer_tensor = global_model_instance.fl_get_module().state_dict()[client_layer]
+                                client_paras.append(client_model_layer_tensor.data.view(-1))
+                                global_paras.append(global_model_layer_tensor.data.view(-1))
+                #all learnable layer flatted. 
+                client_flat = torch.cat(client_paras).detach()
+                global_flat = torch.cat(global_paras).detach()
+
+                learnable_layers_distance = round((global_flat - client_flat).norm('fro').item(),4)
+                distance.append({client_id:learnable_layers_distance})
 
             # Sort client distance and according to selected percentage to select clients
-            sorted_clients_distance = sorted(clients_distance, key=lambda x: x[1], reverse=True)
+            sorted_clients_distance = sorted(distance, key=lambda x:list(x.values())[0], reverse=True)
+
             with open("results/sorted_client_distance.txt", 'a') as file:
-                for client, distance in sorted_clients_distance:
-                    client_norm_info = "Global_round: {}, Client: {}, distance: {}\n".format(epoch_num,client, distance)
+                for item in sorted_clients_distance:
+                    client_num,distance_value = list(item.items())[0]
+                    client_norm_info = "Global_round: {}, Client: {}, distance: {}\n".format(epoch_num,client_num, distance_value)
                     file.write(client_norm_info)
 
             # Select the top 80% largest values along with their corresponding keys
-            for key, _ in sorted_clients_distance[0:total_elements]:
-               self._user_indices_overselected.append(key)
+            top_keys = [list(item.keys())[0] for item in sorted_clients_distance[:total_elements]]
+            self._user_indices_overselected.extend(top_keys)
 
-    
         print(f"client index: {self._user_indices_overselected}")
         return self._user_indices_overselected
 
@@ -594,6 +596,6 @@ class LargestDistanceActiveUserSelectorConfig(ActiveUserSelectorConfig):
     _target_: str = fullclassname(LargestDistanceActiveUserSelector)
 
 @dataclass
-class ModuleLayerActiveUserSelectorConfig(ActiveUserSelectorConfig):
-    _target_: str = fullclassname(ModuleLayerActiveUserSelector)
+class ModelLayerActiveUserSelectorConfig(ActiveUserSelectorConfig):
+    _target_: str = fullclassname(ModelLayerActiveUserSelector)
 

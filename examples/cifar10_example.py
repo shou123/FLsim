@@ -40,6 +40,7 @@ from flsim.data.dirichlet_data_patition import save_cifar10_party_data
 from torchvision.datasets.cifar import CIFAR10
 # from torchvision.models import resnet18
 ## try to load local resnet18
+import torch.nn as nn
 
 
 IMAGE_SIZE = 32
@@ -121,8 +122,8 @@ def main(
     #define non iid data dirichlet_alph value 
     dirichlet_alph = 0.4
 
-    #set for largest_distance_select_persentage
-    largest_distance_select_persentage = 0.4 
+    #set for distance_select_persentage
+    distance_select_persentage = 0.6
 
 
     # pyre-fixme[6]: Expected `Optional[str]` for 2nd param but got `device`.
@@ -139,6 +140,13 @@ def main(
         data_type = data_type,
         dirichlet_alph = dirichlet_alph,
     )
+    
+    learnable_layers = []
+    for idx, layer in enumerate(model.network):
+        if isinstance(layer, (nn.Conv2d, nn.Linear)):
+            learnable_layers.append(idx)
+            print(f"Learnable Layer_{idx}: {type(layer).__name__}")
+    
 
     metrics_reporter = MetricsReporter([Channel.TENSORBOARD, Channel.STDOUT])
 
@@ -148,7 +156,8 @@ def main(
         num_total_users=data_provider.num_train_users(),
         distributed_world_size=1,
         evaluate_data = intermediate_test_data,
-        largest_distance_select_percentage = largest_distance_select_persentage
+        distance_select_percentage = distance_select_persentage,
+        learnable_layers = learnable_layers
     )
 
     trainer.test(

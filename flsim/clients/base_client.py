@@ -173,6 +173,38 @@ class Client:
         self.track(delta=delta, weight=weight, optimizer=optimizer)
 
         return delta, weight
+    
+    def generate_local_update_return_updated_model(
+        self, message: Message, metrics_reporter: Optional[IFLMetricsReporter] = None
+    ) -> Tuple[IFLModel, float]:
+        """Wrapper around all functions called on a client for generating an updated
+        local model.
+
+        Args:
+            message: Message object. Must include the global model with optional metadata.
+
+        NOTE:
+            Only pass a `metrics_reporter` if reporting is needed, i.e. report_metrics
+            will be called on the reporter; else reports will be accumulated in memory.
+        """
+        model = message.model
+        self.global_round_num = message.global_round_num
+
+        updated_model, weight, optimizer = self.copy_and_train_model(
+            model, metrics_reporter=metrics_reporter
+        )
+        # 4. Store updated model if being tracked
+        if self.store_last_updated_model:
+            self.last_updated_model = FLModelParamUtils.clone(updated_model)
+
+        # 5. Compute model delta
+        # delta = self.compute_delta(
+        #     before=model, after=updated_model, model_to_save=updated_model
+        # )
+
+        # self.track(delta=delta, weight=weight, optimizer=optimizer)
+
+        return updated_model
 
     def copy_and_train_model(
         self,
