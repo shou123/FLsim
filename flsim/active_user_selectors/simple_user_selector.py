@@ -18,6 +18,7 @@ from flsim.common.pytest_helper import assertNotEmpty
 from flsim.data.data_provider import IFLDataProvider
 from flsim.utils.config_utils import fullclassname, init_self_cfg
 from omegaconf import MISSING
+import numpy as np
 
 import random
 import re
@@ -461,7 +462,7 @@ class LargestDistanceActiveUserSelector(ActiveUserSelector):
 
             # Sort client distance and according to selected percentage to select clients
             sorted_clients_distance = sorted(clients_distance, key=lambda x: x[1], reverse=True)
-            with open("results/sorted_client_distance.txt", 'a') as file:
+            with open("results/sorted_largest_client_distance.txt", 'a') as file:
                 for client, distance in sorted_clients_distance:
                     client_norm_info = "Global_round: {}, Client: {}, distance: {}\n".format(epoch_num,client, distance)
                     file.write(client_norm_info)
@@ -515,40 +516,69 @@ class ModelLayerActiveUserSelector(ActiveUserSelector):
             # List to store Frobenius norms and corresponding keys
             distance = []
 
-
             # Iterate over each dictionary in self.client_model_deltas
             for client_id,client_model in enumerate(total_updated_models_instance):
-                client_paras = []
-                global_paras = []
-                for layer_index, (client_layer, server_layer) in enumerate(zip(client_model.fl_get_module().state_dict(), global_model_instance.fl_get_module().state_dict())):
+                # distance = []
+                learnable_layers_distance = 0
+                for layer_index, (client_layer, server_layer) in enumerate(zip(client_model[client_id], global_model_instance.fl_get_module().state_dict())):
                     if 'weight' in client_layer and 'weight' in server_layer:
                         match = re.search(r'\.(\d+)\.', client_layer) #to get the number of 'network.16.weight'
                         if match:
                             number = match.group(1)
                             if int(number) in learnable_layers:
-                                client_model_layer_tensor = client_model.fl_get_module().state_dict()[client_layer]
+                                client_model_layer_tensor = client_model[client_id][client_layer]
                                 global_model_layer_tensor = global_model_instance.fl_get_module().state_dict()[client_layer]
-                                client_paras.append(client_model_layer_tensor.data.view(-1))
-                                global_paras.append(global_model_layer_tensor.data.view(-1))
-                #all learnable layer flatted. 
-                client_flat = torch.cat(client_paras).detach()
-                global_flat = torch.cat(global_paras).detach()
 
-                learnable_layers_distance = round((global_flat - client_flat).norm('fro').item(),4)
-                distance.append({client_id:learnable_layers_distance})
+                                client_model_layer_data = client_model_layer_tensor.data.view(-1)
+                                global_model_layer_data = global_model_layer_tensor.data.view(-1)
+                                layer_distance = torch.norm(client_model_layer_data-global_model_layer_data, 'fro')
+                                with open("results/layer_distance.txt", 'a') as file:
+                                    file.write(f"epoch_num： {epoch_num}, client_id: {client_id}, layer_id: {match.string}, layer_distance: {layer_distance}\n")
+                                print(f"epoch_num： {epoch_num}, client_id: {client_id}, layer_id: {match.string}, layer_distance: {layer_distance}")
+
+                            # # np.linalg.norm with flatten
+                            # if int(number) in learnable_layers:
+                            #     client_model_layer_tensor = client_model.fl_get_module().state_dict()[client_layer]
+                            #     global_model_layer_tensor = global_model_instance.fl_get_module().state_dict()[client_layer]
+                            #     client_model_layer_data = client_model_layer_tensor.view(-1).cpu().numpy()  # Convert to numpy array
+                            #     global_model_layer_data = global_model_layer_tensor.view(-1).cpu().numpy()  # Convert to numpy array
+                            #     linalg_flatten_layer_distance = np.linalg.norm(global_model_layer_data - client_model_layer_data)
+                            #     with open("results/linalg_flatten_layer_distance.txt", 'a') as file:
+                            #         file.write(f"epoch_num： {epoch_num}, client_id: {client_id}, layer_id: {match.string}, layer_distance: {linalg_flatten_layer_distance}\n")
+                                
+                            # # np.linalg.norm with unflatten                        
+                            # if int(number) in learnable_layers:
+                            #     client_model_layer = client_model.fl_get_module().state_dict()[client_layer].cpu().numpy()
+                            #     global_model_layer = global_model_instance.fl_get_module().state_dict()[client_layer].cpu().numpy()
+                            #     linalg_unflatten_layer_distance = np.linalg.norm(global_model_layer - client_model_layer)
+                            #     with open("results/linalg_unflatten_layer_distance.txt", 'a') as file:
+                            #         file.write(f"epoch_num： {epoch_num}, client_id: {client_id}, layer_id: {match.string}, layer_distance: {linalg_unflatten_layer_distance}\n")
+                                
+                                learnable_layers_distance+=layer_distance
+                distance.append({client_id:learnable_layers_distance })
+
+                # learnable_layers_distance = round((global_flat - client_flat).norm('fro').item(),4)
+                # distance.append({client_id:learnable_layers_distance})
 
             # Sort client distance and according to selected percentage to select clients
             sorted_clients_distance = sorted(distance, key=lambda x:list(x.values())[0], reverse=True)
 
-            with open("results/sorted_client_distance.txt", 'a') as file:
-                for item in sorted_clients_distance:
-                    client_num,distance_value = list(item.items())[0]
-                    client_norm_info = "Global_round: {}, Client: {}, distance: {}\n".format(epoch_num,client_num, distance_value)
-                    file.write(client_norm_info)
+            # with open("results/sorted_model_layer_distance.txt", 'a') as file:
+            #     for item in sorted_clients_distance:
+            #         client_num,distance_value = list(item.items())[0]
+            #         client_norm_info = "Global_round: {}, Client: {}, distance: {}\n".format(epoch_num,client_num, distance_value)
+            #         file.write(client_norm_info)
 
             # Select the top 80% largest values along with their corresponding keys
             top_keys = [list(item.keys())[0] for item in sorted_clients_distance[:total_elements]]
             self._user_indices_overselected.extend(top_keys)
+
+            with open("results/sorted_model_layer_distance.txt", 'a') as file:
+                for item in sorted_clients_distance:
+                    client_num,distance_value = list(item.items())[0]
+                    if client_num in top_keys:
+                        client_norm_info = "Global_round: {}, Client: {}, distance: {}\n".format(epoch_num,client_num, distance_value)
+                        file.write(client_norm_info)
 
         print(f"client index: {self._user_indices_overselected}")
         return self._user_indices_overselected

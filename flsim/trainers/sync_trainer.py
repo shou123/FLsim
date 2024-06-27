@@ -262,7 +262,7 @@ class SyncTrainer(FLTrainer):
                 # Select clients for training this round
                 t = time()
                 new_model = self._get_flat_params_from(self.server.global_model.fl_get_module())#flated global model
-                global_model_by_layer = self.server.global_model.fl_get_module()
+                # global_model_by_layer = self.server.global_model.fl_get_module()
                 #================================================original client selection=================================================
                 clients = self._client_selection(
                     num_users=num_users_on_worker,
@@ -279,16 +279,6 @@ class SyncTrainer(FLTrainer):
 
                 )
 
-                #================================================select clients for new select algo========================================
-                # clients = self._client_selection_largest_distance(
-                #     num_users=num_users_on_worker,
-                #     users_per_round=users_per_round_on_worker,
-                #     data_provider=data_provider,
-                #     timeline=timeline,
-                #     client_local_model = self.client_local_models,
-                #     select_percentage=0.4
-                # )
-                #==========================================================================================================================
                 self.logger.info(f"Client Selection took: {time() - t} s.")
 
                 # Select clients for calculating post-aggregation *training* metrics
@@ -403,44 +393,6 @@ class SyncTrainer(FLTrainer):
 
         return clients_used
 
-    # def _client_selection(
-    #     self,
-    #     num_users: int,
-    #     users_per_round: int,
-    #     data_provider: IFLDataProvider,
-    #     timeline: Timeline,
-    #     select_percentage:float = 0.0,
-    #     client_local_model:List[Dict] = [],
-    # ) -> List[Client]:
-    #     """Select client for training each round."""
-    #     # pyre-fixme[16]: `SyncTrainer` has no attribute `cfg`.
-    #     num_users_overselected = math.ceil(users_per_round / self.cfg.dropout_rate)
-    #     # pyre-fixme[16]: `SyncTrainer` has no attribute `_user_indices_overselected`.
-    #     self._user_indices_overselected = self.server.select_clients_for_training(
-    #         num_total_users=num_users,
-    #         users_per_round=num_users_overselected,
-    #         data_provider=data_provider,
-    #         global_round_num=timeline.global_round_num(),
-    #     )
-
-    #     file_path = "./results/client_selection_log.txt"
-
-    #     self.client_selection_stype = "client_selection"
-
-    #     # Open the file in append mode and write the information
-    #     with open(file_path, 'a') as file:
-    #         file.write(str(self._user_indices_overselected)+'\n')
-
-    #     clients_to_train = [
-    #         self.create_or_get_client_for_data(i, self.data_provider)
-    #         for i in self._user_indices_overselected
-    #     ]
-    #     if not math.isclose(self.cfg.dropout_rate, 1.0):
-    #         clients_to_train = self._drop_overselected_users(
-    #             clients_to_train, users_per_round
-    #         )
-    #     return clients_to_train
-
     def _client_selection(
         self,
         num_users: int,
@@ -493,95 +445,6 @@ class SyncTrainer(FLTrainer):
             )
         return clients_to_train
 
-        #===============================================
-    # def _client_selection_largest_distance(
-    #     self,
-    #     num_users: int,
-    #     users_per_round: int,
-    #     data_provider: IFLDataProvider,
-    #     timeline: Timeline,
-    #     client_local_model:List[Dict] = [],
-    #     select_percentage:float = 0.0,
-    # ) -> List[Client]:
-    #     """Select client for training each round."""
-    #     # pyre-fixme[16]: `SyncTrainer` has no attribute `cfg`.
-    #     self.client_selection_stype = "largest_disntance_client_selection"
-    #     num_users_overselected = math.ceil(users_per_round / self.cfg.dropout_rate)
-    #     # pyre-fixme[16]: `SyncTrainer` has no attribute `_user_indices_overselected`.
-    #     self.total_elements = int(select_percentage * num_users_overselected)
-    #     user_indices = []
-    #     self._user_indices_overselected = []
-    #     #at the first round, if client_local_model bucket is empty, select all client to training and save the ;oca; models
-    #     if len(client_local_model)== 0:
-    #         for i in range (users_per_round):
-    #             user_indices.append(i)
-    #             self._user_indices_overselected = user_indices
-            
-    #         file_path = "./results/client_selection_log.txt"
-    #         # Open the file in append mode and write the information
-    #         with open(file_path, 'a') as file:
-    #             file.write(str(self._user_indices_overselected)+'\n')
-
-    #         clients_to_train = [
-    #         self.create_or_get_client_for_data(i, self.data_provider)
-    #         for i in self._user_indices_overselected
-    #         ]
-
-
-    #         if not math.isclose(self.cfg.dropout_rate, 1.0):
-    #             clients_to_train = self._drop_overselected_users(
-    #             clients_to_train, users_per_round
-    #         )
-    #     else:
-    #         # at the second round or later, according to the client model to calculate distance, distance = (global model-local model).norm('fro')
-    #         global_model = self._get_flat_params_from(self.server.global_model.fl_get_module())
-    #         # List to store Frobenius norms and corresponding keys
-    #         clients_distance = []
-
-    #         # Iterate over each dictionary in self.client_model_deltas
-    #         for client_model in self.client_local_models:
-    #             for key, value in client_model.items():
-    #                 # Subtract the value from global_model
-    #                 distance = global_model - value
-    #                 frobenius_norm = distance.norm('fro')
-    #                 # Append the Frobenius norm and corresponding key to the list
-    #                 clients_distance.append((key, frobenius_norm.item()))
-
-    #         # Sort client distance and according to selected percentage to select clients
-    #         sorted_clients_distance = sorted(clients_distance, key=lambda x: x[1], reverse=True)
-    #         with open("./results/sorted_client_distance.txt", "a") as file:
-    #             for client, distance in sorted_clients_distance:
-    #                 client_norm_info = "Global_round: {}, Client: {}, distance: {}\n".format(self.epoch_num,client, distance)
-    #                 file.write(client_norm_info)
-
-    #         # Calculate the total number of elements to select (80% of the total)
-    #         self.total_elements = int(select_percentage * len(sorted_clients_distance))
-
-    #         # Select the top 80% largest values along with their corresponding keys
-    #         for key, _ in sorted_clients_distance[0:self.total_elements]:
-    #            self._user_indices_overselected.append(key)
-    #         # self._user_indices_overselected = [key for key, _ in sorted_clients_distance[0:total_elements]]
-
-    #         file_path = "./results/client_selection_log.txt"
-    #         # Open the file in append mode and write the information
-    #         with open(file_path, 'a') as file:
-    #             file.write(str(self._user_indices_overselected)+'\n')
-
-    #         clients_to_train = [
-    #         self.create_or_get_client_for_data(i, self.data_provider)
-    #         for i in self._user_indices_overselected
-    #         ]
-
-
-    #         if not math.isclose(self.cfg.dropout_rate, 1.0):
-    #             clients_to_train = self._drop_overselected_users(
-    #             clients_to_train, users_per_round
-    #         )
-
-    #         # Return the selected keys
-    #     return clients_to_train
-        #===============================================
-
     def _save_model_and_metrics(self, model: IFLModel, best_model_state):
         model.fl_get_module().load_state_dict(best_model_state)
 
@@ -602,6 +465,7 @@ class SyncTrainer(FLTrainer):
         """Update each client-side model from server message."""
         ###########################
         self.client_deltas = []
+        self.client_delta_models = [] #save client_delta_models, not execute the details information 
         ############################
 
         #===========================================evaluate accuracy for partial selection client with all evaluation data==============================================
@@ -663,9 +527,9 @@ class SyncTrainer(FLTrainer):
                 renamed_selector = 'uniform_random_selection'
             elif target == 'flsim.active_user_selectors.sequential_user_selector.SequentialActiveUserSelectorConfig':
                 renamed_selector = 'sequential_selection'
-            elif target == 'flsim.active_user_selectors.random_round_robin_user_selector.RandomRoundRobinActiveUserSelectorConfig':
+            elif target == 'flsim.active_user_selectors.simple_user_selector.RandomRoundRobinActiveUserSelector':
                 renamed_selector = 'random_round_robin_selection'
-            elif target == 'flsim.active_user_selectors.importance_sampling_user_selector.ImportanceSamplingActiveUserSelectorConfig':
+            elif target == 'flsim.active_user_selectors.simple_user_selector.ImportanceSamplingActiveUserSelector':
                 renamed_selector = 'importance_sampling_selection'
             elif target == 'flsim.active_user_selectors.random_multistep_user_selector.RandomMultiStepActiveUserSelectorConfig':
                 renamed_selector = 'radom_multistep_selection'
@@ -772,13 +636,14 @@ class SyncTrainer(FLTrainer):
                 metrics_reporter=metrics_reporter,
             )
 
-            updates_model = client.generate_local_update_return_updated_model(
-                message=server_state_message,
-                metrics_reporter=metrics_reporter,
-            )
+            # updates_model = client.generate_local_update_return_updated_model(
+            #     message=server_state_message,
+            #     metrics_reporter=metrics_reporter,
+            # )
             ##################################################################
             self.client_deltas.append(self._get_flat_params_from(client_delta.fl_get_module()))
-            self.updated_models_instance.append(updates_model)
+            # self.updated_models_instance.append(updates_model)
+            self.client_delta_models.append(client_delta.fl_get_module()) #append each client delta model to the 
             ###################################################################
         
             self.server.receive_update_from_client(Message(client_delta, weight))
@@ -853,6 +718,7 @@ class SyncTrainer(FLTrainer):
         # Receive message from server to clients, i.e. global model state
         ###################################################################
         before = self._get_flat_params_from(self.server.global_model.fl_get_module())
+        before_model = self.server.global_model.fl_get_module()
         ###################################################################
         server_state_message = self.server.broadcast_message_to_clients(
             clients=clients, global_round_num=timeline.global_round_num()
@@ -877,7 +743,7 @@ class SyncTrainer(FLTrainer):
         ####################################################################
         global_after = self._get_flat_params_from(self.server.global_model.fl_get_module())
         distance = []
-        global_after_instance = self.server.global_model
+        after_model = self.server.global_model.fl_get_module()
 
         #=================================for general client selection algo calculate whole distance===================================
         # with open("./results/distance_values.txt", "a") as file:
@@ -915,7 +781,64 @@ class SyncTrainer(FLTrainer):
                 file.write(client_norm_info)
 
         
-        #================================below for model layer distance===============================================
+        # #================================below for model layer distance===============================================
+        # for client_del, i in zip(self.client_deltas, self._user_indices_overselected):
+        #         # self.client_local_models.append({i:before - client_del}) #save each client local model
+        #         #before - client_del is after training updated model
+        #         if not self.updated_models_instance:  # 如果self.client_local_model为空
+        #             self.updated_models_instance.append({i: before - client_del})
+        #         else:
+        #             found = False
+        #             for item in self.updated_models_instance:
+        #                 if i in item:  # 如果i对应的key存在于self.client_local_models中
+        #                     item[i] = before - client_del  # 替换对应的值
+        #                     found = True
+        #                     break
+        #             if not found:
+        #                 self.updated_models_instance.append({i: before - client_del})
+        
+        # # Check if self.total_updated_models_instance is empty
+        # if not self.total_updated_models_instance:
+        #     # self.total_updated_models_instance is empty, so append each element from
+        #     # self.updated_models_instance to it
+        #     self.total_updated_models_instance.extend(self.updated_models_instance)
+        #     self.updated_models_instance = []
+        # else:
+        #     # self.total_updated_models_instance is not empty, so update it based on
+        #     # self._user_indices_overselected and self.updated_models_instance
+        #     for updated_model_instance, i in zip(self.updated_models_instance, self._user_indices_overselected):
+        #         # Check if the index i is within the bounds of total_updated_models_instance
+        #         if i < len(self.total_updated_models_instance):
+        #             # Update the element at position i with updated_model_instance
+        #             self.total_updated_models_instance[i] = updated_model_instance
+        #             self.updated_models_instance = []
+        #         else:
+        #             # If the index i is out of bounds, this means we have a logical error or
+        #             # a misunderstanding of how indices are supposed to work in this context.
+        #             # You might want to handle this case differently or raise an error.
+        #             print(f"Index {i} is out of bounds for total_updated_models_instance with length {len(self.total_updated_models_instance)}.")
+
+
+
+ #================================below for model layer distance===============================================
+        for client_del, i in zip(self.client_delta_models, self._user_indices_overselected):
+                
+                updated_client_model_state_dict = self._updated_client_model(before_model,client_del)
+                
+                # self.client_local_models.append({i:before - client_del}) #save each client local model
+                #before - client_del is after training updated model
+                if not self.updated_models_instance:  # 如果self.client_local_model为空
+                    self.updated_models_instance.append({i: updated_client_model_state_dict})
+                else:
+                    found = False
+                    for item in self.updated_models_instance:
+                        if i in item:  # 如果i对应的key存在于self.client_local_models中
+                            item[i] = updated_client_model_state_dict  # 替换对应的值
+                            found = True
+                            break
+                    if not found:
+                        self.updated_models_instance.append({i: updated_client_model_state_dict})
+        
         # Check if self.total_updated_models_instance is empty
         if not self.total_updated_models_instance:
             # self.total_updated_models_instance is empty, so append each element from
@@ -941,6 +864,17 @@ class SyncTrainer(FLTrainer):
         #####################################################################
         self.logger.info(f"Finalizing round took {time() - t} s.")
         return server_return_metrics
+
+
+    def _updated_client_model(self,before_model, delta_model):
+        before = before_model.state_dict()
+        delta = delta_model.state_dict()
+        for key in before.keys():
+            if key in delta:
+                before[key] = before[key] - delta[key]
+        updated_client_model_state_dict = before
+        return updated_client_model_state_dict
+
 
 
     def _train_one_round_report_metrics(

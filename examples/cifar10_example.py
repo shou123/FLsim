@@ -120,7 +120,7 @@ def main(
     # data_type = "iid"
 
     #define non iid data dirichlet_alph value 
-    dirichlet_alph = 0.4
+    dirichlet_alph = 0.9
 
     #set for distance_select_persentage
     distance_select_persentage = 0.6
@@ -128,6 +128,12 @@ def main(
 
     # pyre-fixme[6]: Expected `Optional[str]` for 2nd param but got `device`.
     global_model = FLModel(model, device)
+    model1 = global_model.fl_get_module()
+    value = model1.state_dict()
+
+    with open("./results/model_weight.txt", "a") as file:
+        file.write(f"global_weight: {value}")
+
     if cuda_enabled:
         global_model.fl_cuda()
     trainer = instantiate(trainer_config, model=global_model, cuda_enabled=cuda_enabled)
